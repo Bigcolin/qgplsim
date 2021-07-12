@@ -10,4 +10,4 @@ nSample = 1000
 X, Z, y = dgp(nSample, γ, θ, α, β)
 
 
-alpha, theta, alpha_z, theta_z = qglsim.alphatheta_estimator(X, Z, y)
+alpha, theta, alpha_z, theta_z = qgplsim.alphatheta_estimator(X, Z, y)
