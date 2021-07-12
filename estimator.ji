@@ -1,4 +1,4 @@
-module qglsim
+module qgplsim
 using Optim, LinearAlgebra, Distributions, Random, Statistics
 import Base.Threads.@threads
 function Base.:-(X::Matrix, xi::Vector)
