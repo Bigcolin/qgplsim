@@ -1,0 +1,120 @@
+module qglsim
+using Optim, LinearAlgebra, Distributions, Random, Statistics
+import Base.Threads.@threads
+function Base.:-(X::Matrix, xi::Vector)
+    n, p = size(X)
+    for i in 1:n
+        X[i, :] = X[i, :] - xi
+    end
+    X
+end
+
+function collection(c::Array{Int, 2})
+    n, p = size(c)
+    categ_c = []
+    dict_c = Dict()
+    for i in 1:n
+        if c[i, :] in categ_c
+            push!(dict_c[c[i, :]], i)
+        else
+            push!(categ_c, c[i, :])
+            dict_c[c[i, :]] = [i]
+        end
+    end
+    categ_c, dict_c
+end
+
+distribution_ker = Normal(0, 1)
+
+function ker(x)
+    pdf(distribution_ker, x)
+end
+
+function ker(x::Vector, h::Vector)
+    d = length(x)
+    v = 1
+    for i in 1:d 
+        v *= ker(x[i]/h[i])
+    end
+    v
+end
+
+function ker(x::Matrix, xi::Vector, h::Vector)
+    n, p = size(x)
+    v = zeros(n)
+    for i in 1:n
+        v[i] = ker(x[i, :] - xi, h)
+    end
+    v
+end
+
+ρ(x, α = 0.5) = abs(x) + (2α - 1)x
+
+function optimfunc(f, init_value, tols = 1e-5)
+    res = optimize(f, init_value, method=BFGS(), f_tol=tols)
+    return res 
+end
+
+
+function alphatheta_estimator(X, Z, y)
+	n, p = size(X)
+	α, θ = zeros(p), zeros(p)
+	categ, index = collection(Z)
+	ncateg = index.count
+
+	αz = zeros(ncateg, p)
+	θz = zeros(ncateg, p)
+	for k in 1:ncateg
+		z = categ[k]
+		nz = length(index[z])
+		az = zeros(nz)
+		bz = zeros(nz, p)
+		cz = zeros(nz)
+		yz = y[index[z]]
+		Xz = X[index[z], :]
+		KerVal = zeros(nz, nz)
+		h = ones(p) .* nz^(-0.4)
+		for i in 1:nz
+			KerVal[:, i] = ker(Xz, Xz[i, :], h)
+		end
+
+		for i in 1:nz
+
+			tar_alpha(w) = sum(ρ.(yz .- w[1] - (Xz - Xz[i, :]) * w[2:end]) .* KerVal[:, i])
+			res = optimfunc(tar_alpha, zeros(p + 1))
+			wi = res.minimizer
+			az[i] = wi[1]
+			bz[i,:] = wi[2:end]
+
+		end
+
+		sum_bz = zeros(p)
+		for i in 1:nz - 1
+			for j in i + 1:nz
+				sum_bz += (bz[i, :] - bz[j, :])/norm(bz[i, :] - bz[j, :])
+			end
+		end
+		αz[k,:] = sum_bz / (nz - 1)
+
+		theta_z = zeros(nz, p)
+		for i in 1:nz
+			tar_theta(w) = sum(ρ.(yz .- az[i] - (Xz - Xz[i, :])*(w[2:end] +  w[1] * αz[k, :])) .* KerVal[:, i])
+			res = optimfunc(tar_theta, zeros(p + 1))
+			wi = res.minimizer
+			cz[i] = wi[1]
+			theta_z[i,:] = wi[2:end]
+		end
+		θz[k, :] = sum(theta_z, dims = 1)/nz
+
+		α += αz[k, :] * nz / n
+		θ += θz[k, :] * nz / n
+	end
+	α, θ, αz, θz
+
+end
+
+function betagamma_estimator()
+
+end
+
+end
