@@ -1,7 +1,7 @@
 include("DGP.ji")
 include("estimator.ji")
 
-nSample = 250
+nSample = 1000
 
 γ = [1, 1]
 θ = [1, 1]

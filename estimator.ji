@@ -69,7 +69,7 @@ function alphatheta_estimator(X, Z, y)
 		nz = length(index[z])
 		az = zeros(nz)
 		bz = zeros(nz, p)
-		cz = zeros(nz)
+		cz = zeros(nz, p)
 		yz = y[index[z]]
 		Xz = X[index[z], :]
 		KerVal = zeros(nz, nz)
@@ -94,22 +94,29 @@ function alphatheta_estimator(X, Z, y)
 				sum_bz += (bz[i, :] - bz[j, :])/norm(bz[i, :] - bz[j, :])
 			end
 		end
-		αz[k,:] = sum_bz / (nz - 1)
+		αz[k,:] = sum_bz / (nz - 1) # this is not alpha, or alpha / ca 
 
 		theta_z = zeros(nz, p)
 		for i in 1:nz
-			tar_theta(w) = sum(ρ.(yz .- az[i] - (Xz - Xz[i, :])*(w[2:end] +  w[1] * αz[k, :])) .* KerVal[:, i])
-			res = optimfunc(tar_theta, zeros(p + 1))
+			tar_theta(w) = sum(ρ.(yz .- az[i] - (Xz - Xz[i, :])*(w[(p + 1):end] .+ sum(w[1:p] .* αz[k, :]))) .* KerVal[:, i])
+			res = optimfunc(tar_theta, zeros(2*p))
 			wi = res.minimizer
-			cz[i] = wi[1]
-			theta_z[i,:] = wi[2:end]
+			cz[i,:] = wi[1:p]
+			theta_z[i,:] = wi[(p + 1):end]
 		end
 		θz[k, :] = sum(theta_z, dims = 1)/nz
 
+		# ca = 0 # coef. of alpha
+		# for i in 1:nz
+		# 	ca +=  norm(bz[i, :])
+		# end
+		# ca = sum(abs.(cz)) / ca 
+		# println(ca, "\n")
+		# αz[k, :] = αz[k, :] * ca
 		α += αz[k, :] * nz / n
 		θ += θz[k, :] * nz / n
 	end
-	α, θ, αz, θz
+	α, θ, αz, θz #, cz
 
 end
 
