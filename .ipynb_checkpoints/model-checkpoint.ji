@@ -1,0 +1,19 @@
+include("DGP.ji")
+include("estimator.ji")
+
+n = 250
+
+γ = [1, 1]
+θ = [1, 1]
+α = [1, -1]
+β = [1, -0.5]
+f = open("theta.txt", "w")
+close(f)
+function main(i, nSample = n)
+    X, Z, y = dgp(nSample, γ, θ, α, β)
+    alpha, theta, alpha_z, theta_z = qgplsim.alphatheta_estimator(X, Z, y)
+    f = open("theta.txt", "a")
+    println(f, i, ": ", theta, "\n")
+    close(f)
+    theta
+end

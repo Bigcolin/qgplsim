@@ -1,0 +1,19 @@
+include("model.ji")
+import Base.Threads.@threads
+
+Θ  = [[1,1], [2,2], [3,3], [4,4]]
+γ = [1, 1]
+# θ = [2, 2]
+α = [-1, 1]
+β = [1, -0.5]
+f = open("theta.txt", "w")
+close(f)
+nSim = 100
+nSample = 200
+Theta = zeros(nSim, 2)
+@threads for θ in Θ
+    for i in 1:100
+        Theta[i,:] = main(i, γ, θ, α, β, nSample)
+    end
+    println(θ, ": ", sum(Theta, dims = 1))
+end

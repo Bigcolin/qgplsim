@@ -1,5 +1,6 @@
 module qgplsim
 using Optim, LinearAlgebra, Distributions, Random, Statistics
+import Base.Threads.@threads
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
     for i in 1:n
@@ -49,7 +50,7 @@ end
 
 ρ(x, α = 0.5) = abs(x) + (2α - 1)x
 
-function optimfunc(f, init_value, tols = 1e-6)
+function optimfunc(f, init_value, tols = 1e-5)
     res = optimize(f, init_value, method=BFGS(), f_tol=tols)
     return res 
 end
@@ -72,7 +73,7 @@ function alphatheta_estimator(X, Z, y)
 		yz = y[index[z]]
 		Xz = X[index[z], :]
 		KerVal = zeros(nz, nz)
-		h = ones(p) .* nz^(-0.2)
+		h = ones(p) .* nz^(-0.4)
 		for i in 1:nz
 			KerVal[:, i] = ker(Xz, Xz[i, :], h)
 		end
