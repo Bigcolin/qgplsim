@@ -8,8 +8,8 @@ function Base.:-(X::Matrix, xi::Vector)
     X
 end
 
-function collection(c::Array{Int, 2})
-    n, p = size(c)
+function collection(c)
+    n,  = size(c)
     categ_c = []
     dict_c = Dict()
     for i in 1:n
@@ -20,7 +20,8 @@ function collection(c::Array{Int, 2})
             dict_c[c[i, :]] = [i]
         end
     end
-    categ_c, dict_c
+    most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c, categ_c[most_c]
 end
 
 distribution_ker = Normal(0, 1)
@@ -55,22 +56,26 @@ function optimfunc(f, init_value, tols = 1e-6)
 end
 
 
-function alphatheta_estimator(X, Z, y)
+function alpha_estimator(X, Z, y)
 	n, p = size(X)
 	α, θ = zeros(p), zeros(p)
-	categ, index = collection(Z)
+	categ, index, = collection(Z)
 	ncateg = index.count
 
+	sign_alpha = []
 	αz = zeros(ncateg, p)
 	θz = zeros(ncateg, p)
+	Cz = zeros(n, p)
+	Bz = zeros(n, p)
 	for k in 1:ncateg
 		z = categ[k]
-		nz = length(index[z])
+		indz = index[z]
+		nz = length(indz)
 		az = zeros(nz)
 		bz = zeros(nz, p)
 		cz = zeros(nz, p)
-		yz = y[index[z]]
-		Xz = X[index[z], :]
+		yz = y[indz]
+		Xz = X[indz, :]
 		KerVal = zeros(nz, nz)
 		h = ones(p) .* nz^(-0.2)
 		for i in 1:nz
@@ -84,16 +89,17 @@ function alphatheta_estimator(X, Z, y)
 			wi = res.minimizer
 			az[i] = wi[1]
 			bz[i,:] = wi[2:end]
+			Bz[indz[i],:] = wi[2:end]
 
 		end
 
 		sum_bz = zeros(p)
 		for i in 1:nz - 1
 			for j in i + 1:nz
-				sum_bz += (bz[i, :] - bz[j, :])/norm(bz[i, :] - bz[j, :])
+				sum_bz += (bz[i, :] - bz[j, :])
 			end
 		end
-		αz[k,:] = sum_bz / (nz - 1) # this is not alpha, or alpha / ca 
+		αz[k,:] = sum_bz / norm(sum_bz) # this is not alpha, or alpha / ca 
 
 		theta_z = zeros(nz, p)
 		for i in 1:nz
@@ -101,6 +107,7 @@ function alphatheta_estimator(X, Z, y)
 			res = optimfunc(tar_theta, zeros(2*p))
 			wi = res.minimizer
 			cz[i,:] = wi[1:p]
+			Cz[indz[i],:] = wi[1:p]
 			theta_z[i,:] = wi[(p + 1):end]
 		end
 		θz[k, :] = sum(theta_z, dims = 1)/nz
@@ -112,15 +119,19 @@ function alphatheta_estimator(X, Z, y)
 		# ca = sum(abs.(cz)) / ca 
 		# println(ca, "\n")
 		# αz[k, :] = αz[k, :] * ca
-		α += αz[k, :] * nz / n
+		push!(sign_alpha, sign.(αz[k, :])) 
+		α += abs.(αz[k, :]) * nz / n
 		θ += θz[k, :] * nz / n
 	end
-	α, θ, αz, θz #, cz
+	c, d, sign_alpha = collection(sign_alpha)
+	α.* sign_alpha[1],  Bz # Cz
 
 end
 
-function betagamma_estimator()
-
+function theta_estimator(alpha, Bz)
+	n, p = size(Bz)
+	theta = sum(Bz, dims = 1) - sum(Bz * alpha) * alpha
+	theta / n
 end
 
 end
