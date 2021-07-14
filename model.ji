@@ -7,7 +7,7 @@ function main(γ, θ, α, β, nSample = 500)
     alpha, Bz = qgplsim.alpha_estimator(X, Z, y)
     theta = qgplsim.theta_estimator(alpha, Bz)
     # f = open("theta.txt", "a")
-    println("alpha => ", alpha, "\n", "theta =>", theta, "\n")
+    println("alpha => ", alpha, "\n", "theta => ", theta, "\n")
     # println(f, θ, ": ",alpha, theta, "\n")
     # close(f)
     alpha, theta
