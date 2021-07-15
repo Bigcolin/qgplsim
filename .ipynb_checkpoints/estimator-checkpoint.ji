@@ -1,6 +1,5 @@
 module qgplsim
 using Optim, LinearAlgebra, Distributions, Random, Statistics
-import Base.Threads.@threads
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
     for i in 1:n
@@ -9,8 +8,8 @@ function Base.:-(X::Matrix, xi::Vector)
     X
 end
 
-function collection(c::Array{Int, 2})
-    n, p = size(c)
+function collection(c)
+    n,  = size(c)
     categ_c = []
     dict_c = Dict()
     for i in 1:n
@@ -21,7 +20,8 @@ function collection(c::Array{Int, 2})
             dict_c[c[i, :]] = [i]
         end
     end
-    categ_c, dict_c
+    most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c, categ_c[most_c]
 end
 
 distribution_ker = Normal(0, 1)
@@ -34,48 +34,53 @@ function ker(x::Vector, h::Vector)
     d = length(x)
     v = 1
     for i in 1:d 
-        v *= ker(x[i]/h[i])
+        v *= ker(x[i]/h[i])/h[i]
     end
     v
 end
 
-function ker(x::Matrix, xi::Vector, h::Vector)
-    n, p = size(x)
+function ker(X::Matrix, h::Vector)
+    n, p = size(X)
     v = zeros(n)
     for i in 1:n
-        v[i] = ker(x[i, :] - xi, h)
+        v[i] = ker(X[i, :], h)
     end
     v
 end
 
 ρ(x, α = 0.5) = abs(x) + (2α - 1)x
 
-function optimfunc(f, init_value, tols = 1e-5)
+function optimfunc(f, init_value, tols = 1e-4)
     res = optimize(f, init_value, method=BFGS(), f_tol=tols)
     return res 
 end
 
 
-function alphatheta_estimator(X, Z, y)
+function alpha_estimator(X, Z, y)
 	n, p = size(X)
 	α, θ = zeros(p), zeros(p)
-	categ, index = collection(Z)
+	categ, index, = collection(Z)
 	ncateg = index.count
 
+	sign_alpha = []
 	αz = zeros(ncateg, p)
 	θz = zeros(ncateg, p)
+	Cz = zeros(n, p)
+	Bz = zeros(n, p)
 	for k in 1:ncateg
 		z = categ[k]
-		nz = length(index[z])
+		indz = index[z]
+		nz = length(indz)
 		az = zeros(nz)
 		bz = zeros(nz, p)
 		cz = zeros(nz, p)
-		yz = y[index[z]]
-		Xz = X[index[z], :]
+		yz = y[indz]
+		Xz = X[indz, :]
 		KerVal = zeros(nz, nz)
-		h = ones(p) .* nz^(-0.4)
+		h = ones(p) .* nz^(-0.2)
 		for i in 1:nz
-			KerVal[:, i] = ker(Xz, Xz[i, :], h)
+            Xi = Xz - Xz[i, :]
+			KerVal[:, i] = ker(Xi, h)
 		end
 
 		for i in 1:nz
@@ -85,16 +90,17 @@ function alphatheta_estimator(X, Z, y)
 			wi = res.minimizer
 			az[i] = wi[1]
 			bz[i,:] = wi[2:end]
+			Bz[indz[i],:] = wi[2:end]
 
 		end
 
 		sum_bz = zeros(p)
 		for i in 1:nz - 1
 			for j in i + 1:nz
-				sum_bz += (bz[i, :] - bz[j, :])/norm(bz[i, :] - bz[j, :])
+				sum_bz += (bz[i, :] - bz[j, :])
 			end
 		end
-		αz[k,:] = sum_bz / (nz - 1) # this is not alpha, or alpha / ca 
+		αz[k,:] = sum_bz / norm(sum_bz) # this is not alpha, or alpha / ca 
 
 		theta_z = zeros(nz, p)
 		for i in 1:nz
@@ -102,6 +108,7 @@ function alphatheta_estimator(X, Z, y)
 			res = optimfunc(tar_theta, zeros(2*p))
 			wi = res.minimizer
 			cz[i,:] = wi[1:p]
+			Cz[indz[i],:] = wi[1:p]
 			theta_z[i,:] = wi[(p + 1):end]
 		end
 		θz[k, :] = sum(theta_z, dims = 1)/nz
@@ -113,15 +120,55 @@ function alphatheta_estimator(X, Z, y)
 		# ca = sum(abs.(cz)) / ca 
 		# println(ca, "\n")
 		# αz[k, :] = αz[k, :] * ca
-		α += αz[k, :] * nz / n
+		push!(sign_alpha, sign.(αz[k, :])) 
+		α += abs.(αz[k, :]) * nz / n
 		θ += θz[k, :] * nz / n
 	end
-	α, θ, αz, θz #, cz
+	c, d, sign_alpha = collection(sign_alpha)
+	α.* sign_alpha[1],  Bz # Cz
 
 end
 
-function betagamma_estimator()
-
+function theta_estimator(alpha, Bz)
+	n, p = size(Bz)
+	theta = sum(Bz, dims = 1) - sum(Bz * alpha) * alpha / norm(alpha)
+	theta / n
 end
 
+function gamma_estimator(v, Z, y)
+	n, q = size(Z)
+	gamma = zeros(q)
+	categ, index, = collection(Z)
+	ncateg = index.count
+	DGz = zeros(n)
+	for k in 1:ncateg
+		z = categ[k]
+		indz = index[z]
+		nz = length(indz)
+		dgz = zeros(nz, q)
+		yz = y[indz]
+		vz = v[indz]
+		KerVal = zeros(nz, nz)
+		h = nz^(-0.2)
+		for i in 1:nz
+			KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
+		end
+	end
+
+		for i in 1:nz
+
+			tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- vz[i]) * w[2]) .* KerVal[:, i])
+			res = optimfunc(tar_alpha, zeros(2))
+			wi = res.minimizer
+			dgz[i] = wi[2]
+			DGz[indz[i]] = wi[2]
+
+		end
+	gamma
 end
+
+function beta_estimator()
+	
+end
+
+end # module
