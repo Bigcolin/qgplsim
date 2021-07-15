@@ -34,7 +34,7 @@ function ker(x::Vector, h::Vector)
     d = length(x)
     v = 1
     for i in 1:d 
-        v *= ker(x[i]/h[i])
+        v *= ker(x[i]/h[i])/h[i]
     end
     v
 end
@@ -50,7 +50,7 @@ end
 
 ρ(x, α = 0.5) = abs(x) + (2α - 1)x
 
-function optimfunc(f, init_value, tols = 1e-6)
+function optimfunc(f, init_value, tols = 1e-4)
     res = optimize(f, init_value, method=BFGS(), f_tol=tols)
     return res 
 end
@@ -130,8 +130,34 @@ end
 
 function theta_estimator(alpha, Bz)
 	n, p = size(Bz)
-	theta = sum(Bz, dims = 1) - sum(Bz * alpha) * alpha
+	theta = sum(Bz, dims = 1) - sum(Bz * alpha) * alpha / norm(alpha)
 	theta / n
 end
 
+function gamma_estimator(v, Z, y)
+	n, q = size(Z)
+	gamma = zeros(q)
+	categ, index, = collection(Z)
+
+	for k in 1:ncateg
+		z = categ[k]
+		indz = index[z]
+		nz = length(indz)
+		gz = zeros(nz, q)
+		yz = y[indz]
+		vz = v[indz]
+		KerVal = zeros(nz, nz)
+		h = ones(q) .* nz^(-0.2)
+		for i in 1:nz
+			KerVal[:, i] = ker.(vz .- vz[i] / h[i])
+		end
+	end
+
+	gamma
 end
+
+function beta_estimator()
+	
+end
+
+end # module

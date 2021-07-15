@@ -3,9 +3,11 @@ include("estimator.ji")
 
 
 function main(γ, θ, α, β, nSample = 500)
-    X, Z, y = dgp(nSample, γ, θ, α, β)
+    X, Z, y = dgp(nSample, γ, θ, α, β, true)
     alpha, Bz = qgplsim.alpha_estimator(X, Z, y)
     theta = qgplsim.theta_estimator(alpha, Bz)
+    v = X*alpha
+    gamma = qgplsim.gamma_estimator(v, Z, y)
     # f = open("theta.txt", "a")
     # println("alpha => ", alpha, "\n", "theta => ", theta, "\n")
     # println(f, θ, ": ",alpha, theta, "\n")
