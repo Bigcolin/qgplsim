@@ -1,0 +1,24 @@
+function discret_var(n)
+    a = rand(n)
+    z1 = a .> 0.5
+    
+    b = rand(n)
+    z2 = b .> 0.75
+    z2 += b .> 0.25
+    z = [z1 z2]
+end
+
+function dgp(nSample, γ, θ, α, β, z = true)
+    p = length(α)
+    ϵ = randn(nSample)
+    X = randn(nSample, p)
+    if z
+        Z = discret_var(nSample)
+    else
+        Z = zeros(nSample, 2)
+    end
+
+    y1 = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
+    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
+    X, Z, y2
+end
