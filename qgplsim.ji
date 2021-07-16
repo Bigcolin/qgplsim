@@ -29,10 +29,20 @@ struct model
 
 end
 
-function estimator(data::model)
-	alpha, dGz = alpha_estimator(data)
+function estimator(data::model, alpha_type = 1)
+	alpha_g, alpha_l, dGz, = alpha_estimator(data)
+	
+	if alpha_type == 0
+		alpha = alpha_g
+	else 
+		alpha = alpha_l
+	end
 	theta = theta_estimator(alpha, dGz)
-	gamma = gamma_estimator(data, alpha, theta)
+	if sum(abs.(data.Z)) < 1  # no Z 
+		gamma = 0
+	else
+		gamma = gamma_estimator(data, alpha, theta)
+	end
 	alpha, theta, gamma
 end
 
@@ -40,14 +50,12 @@ function alpha_estimator(data::model)
 	X, Z, y, τ = data.X, data.Z, data.y, data.quantileNum
 	
 	n, p = size(X)
-	α, θ = zeros(p), zeros(p)
+	α = zeros(p)
 	categ, index = data.categ, data.index
 	ncateg = index.count
 
 	sign_alpha = []
 	αz = zeros(ncateg, p)
-	θz = zeros(ncateg, p)
-	Cz = zeros(n, p)
 	Bz = zeros(n, p)
 	for k in 1:ncateg
 		z = categ[k]
@@ -55,7 +63,6 @@ function alpha_estimator(data::model)
 		nz = length(indz)
 		az = zeros(nz)
 		bz = zeros(nz, p)
-		cz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
 		KerVal = zeros(nz, nz)
@@ -84,30 +91,21 @@ function alpha_estimator(data::model)
 		end
 		αz[k,:] = sum_bz / norm(sum_bz) # norm(α)
 
-		theta_z = zeros(nz, p)
-		for i in 1:nz
-
-            		Xi = Xz - Xz[i, :]
-			loss(w) = sum(ρ.(yz .- az[i] - Xi*(w[(p + 1):end] .+ sum(w[1:p] .* αz[k, :])), τ) .* KerVal[:, i])
-			res = localLinear_quantReg.optimfunc(loss, zeros(2*p))
-			wi = res.minimizer
-			cz[i,:] = wi[1:p]
-			Cz[indz[i],:] = wi[1:p]
-			theta_z[i,:] = wi[(p + 1):end]
-		end
-		θz[k, :] = sum(theta_z, dims = 1)/nz
-
 		push!(sign_alpha, sign.(αz[k, :])) 
 		α += abs.(αz[k, :]) * nz / n
-		θ += θz[k, :] * nz / n
+
 	end
 	c, d, sign_alpha = collection(sign_alpha)
 
-	alpha = α.* sign_alpha[1]
-	if sum(alpha) < 0
-		alpha = -alpha
+	alpha_local = α.* sign_alpha[1]
+	sum_Bz = zeros(p)
+	for i in 1:n - 1
+		for j in i + 1:n
+			sum_Bz += (Bz[i, :] - Bz[j, :])
+		end
 	end
-	alpha,  Bz # Cz
+	alpha_global = sum_Bz / norm(sum_Bz)
+	alpha_global, alpha_local,  Bz , αz # Cz
 
 end
 
