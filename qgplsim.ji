@@ -251,6 +251,9 @@ function gamma_estimator(data::model, alpha, theta)
 		ΔJ[k] += glquad(dgk, v0, v1, c0, c1)
 	end
 	gamma = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔJ /(c1 - c0)
+	if sum(gamma) < 0
+		gamma = - gamma
+	end
 	gamma
 
 end
@@ -258,7 +261,6 @@ end
 function Gz_DGz(v, Z, y)
 
 	n, q = size(Z)
-	gamma = zeros(q)
 	categ, index, = collection(Z)
 	ncateg = index.count
 	Gz = zeros(n)
@@ -272,7 +274,7 @@ function Gz_DGz(v, Z, y)
 		yz = y[indz]
 		vz = v[indz]
 		KerVal = zeros(nz, nz)
-		h = nz^(-0.2)
+		h = 2*nz^(-0.4)
 		for i in 1:nz
 			KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
 		end
