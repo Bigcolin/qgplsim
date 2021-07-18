@@ -45,7 +45,9 @@ function estimator(data::model, alpha_type = 1)
 	else
 		gamma = gamma_estimator(data, alpha, theta)
 	end
-	alpha, theta, gamma
+    
+    beta = beta_estimator(data, alpha, gamma)
+	alpha, theta, gamma, beta
 end
 
 function alpha_estimator(data::model)
@@ -216,8 +218,29 @@ function Gz_DGz(v, Z, y)
 
 end
 
-function beta_estimator()
-	
+function beta_estimator(data::model, alpha, gamma)
+    v = data.X * alpha # g(Xα + Zγ) => univar func. g(v + zγ) after α was determined and  Z = z
+    categ, index = data.categ, data.index
+    g, dg = qgplsim.Gz_DGz(v, data.Z, data.y - v) # g: g(v), dg: g'(v)
+    n = length(data.y)
+    
+    nij = n*(n - 1)/2
+    nij = Int(nij)
+    am = zeros(nij)
+    bm = zeros(nij)
+    zm = zeros(nij, 2)
+    c = 1
+    for i in 1:n - 1
+        for j in  (i + 1):n
+            zm[c, :] = data.Z[j, :] - data.Z[i, :]
+
+            am[c] = g[j] - g[i]
+            bm[c] = dg[i].*(transpose(zm[c, :]) * gamma)
+            c += 1
+        end
+    end
+    beta = inv(transpose(zm) * (zm)) * transpose(zm) * am + mean(bm) * gamma
+    beta
 end
 
 end # module

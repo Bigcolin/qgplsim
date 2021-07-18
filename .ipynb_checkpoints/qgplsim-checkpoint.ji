@@ -1,5 +1,7 @@
 
 module qgplsim
+include("supportFunctions.ji")
+include("localLinear_quantReg.ji")
 using Optim, LinearAlgebra, Distributions, Random, Statistics
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
@@ -7,83 +9,6 @@ function Base.:-(X::Matrix, xi::Vector)
         X[i, :] = X[i, :] - xi
     end
     X
-end
-
-function collection(c)
-    n,  = size(c)
-    categ_c = []
-    dict_c = Dict()
-    for i in 1:n
-        if c[i, :] in categ_c
-            push!(dict_c[c[i, :]], i)
-        else
-            push!(categ_c, c[i, :])
-            dict_c[c[i, :]] = [i]
-        end
-    end
-    most_c = argmax(length.(dict_c[z] for z in categ_c))
-    categ_c, dict_c, categ_c[most_c]
-end
-
-distribution_ker = Normal(0, 1)
-
-function ker(x)
-    pdf(distribution_ker, x)
-end
-
-function ker(x::Vector, h::Float64)
-	ker.(x/h)/h
-end
-
-function ker(x::Vector, h::Vector)
-    d = length(x)
-    v = 1
-    for i in 1:d 
-        v *= ker(x[i]/h[i])/h[i]
-    end
-    v
-end
-
-function ker(X::Matrix, h::Vector)
-    n, p = size(X)
-    v = zeros(n)
-    for i in 1:n
-        v[i] = ker(X[i, :], h)
-    end
-    v
-end
-
-ρ(x, α = 0.5) = abs(x) + (2α - 1)x
-
-function optimfunc(f, init_value, tols = 1e-4)
-    res = optimize(f, init_value, method=BFGS(), f_tol=tols)
-    return res 
-end
-function glquad(g, v0, v1, c0, c1, ng::Int = 11)
-	
-	if ng == 11
-
-	      knots = [0, -0.9782, -0.8871, -0.7302, -0.5191, -0.2695, 0.9782, 0.8871, 0.7302, 0.5191, 0.2695]
-	      weigtht = [ 0.2729, 0.0557, 0.1256, 0.1863, 0.2332, 0.2628, 0.0557, 0.1256, 0.1863, 0.2332, 0.2628]
-
-	elseif ng == 8
-
-	      knots = [-0.4801,    -0.3983,   -0.2628,   -0.0917,    0.0917,    0.2628,    0.3983,    0.4801] .* 2
-	      weigtht = [0.1012,       0.22240,   0.3137,    0.3627,    0.3627,    0.3137,    0.2224,    0.1012]         
-
-	elseif ng == 6
-		
-	      knots = [-0.93246951,-0.66120939, -0.23861919,  0.23861919,  0.66120939,  0.93246951]
-	      weigtht = [0.17132449,   0.36076157,  0.46791393,  0.46791393,  0.36076157,  0.17132449]     
-
-
-	end
-
-	v = (knots .+ 1)./2 .* (v1 - v0) .+ v0
-	gv = g.(v) 
-
-	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
-	transpose(gv_) * weigtht
 end
 
 struct model
@@ -104,25 +29,37 @@ struct model
 
 end
 
-function estimator(data::model)
-	alpha, dGz = alpha_estimator(data)
+function estimator(data::model, alpha_type = 1)
+	alpha_g, alpha_l, dGz, = alpha_estimator(data)
+	
+	if alpha_type == 0
+		alpha = [1.0, -1.0]	
+	elseif alpha_type == 1
+		alpha = alpha_g
+	elseif alpha_type == 2 
+		alpha = alpha_l
+	end
 	theta = theta_estimator(alpha, dGz)
-	gamma = gamma_estimator(data, alpha, theta)
-	alpha, theta, gamma
+	if sum(abs.(data.Z)) < 1  # no Z 
+		gamma = 0
+	else
+		gamma = gamma_estimator(data, alpha, theta)
+	end
+    
+    beta = beta_estimator(data, alpha, gamma)
+	alpha, theta, gamma, beta
 end
 
 function alpha_estimator(data::model)
 	X, Z, y, τ = data.X, data.Z, data.y, data.quantileNum
 	
 	n, p = size(X)
-	α, θ = zeros(p), zeros(p)
+	α = zeros(p)
 	categ, index = data.categ, data.index
 	ncateg = index.count
 
 	sign_alpha = []
 	αz = zeros(ncateg, p)
-	θz = zeros(ncateg, p)
-	Cz = zeros(n, p)
 	Bz = zeros(n, p)
 	for k in 1:ncateg
 		z = categ[k]
@@ -130,7 +67,6 @@ function alpha_estimator(data::model)
 		nz = length(indz)
 		az = zeros(nz)
 		bz = zeros(nz, p)
-		cz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
 		KerVal = zeros(nz, nz)
@@ -138,9 +74,13 @@ function alpha_estimator(data::model)
 		for i in 1:nz
             		Xi = Xz - Xz[i, :]
 			KerVal[:, i] = ker(Xi, h)
-			loss(w) = sum(ρ.(yz .- w[1] - (Xz - Xz[i, :]) * w[2:end], τ) .* KerVal[:, i])
-			res = optimfunc(loss, zeros(p + 1))
-			wi = res.minimizer
+
+		# the accuracy of alpha plays the mvp in qgplsim, so 
+		# we move the estimation of alpha to localLinear_quantReg.ji
+		# for further consideration and improvement.
+
+			modeli = localLinear_quantReg.npqr_model(yz, Xi)
+			wi = localLinear_quantReg.fit(modeli, KerVal, τ)
 			az[i] = wi[1]
 			bz[i,:] = wi[2:end]
 			Bz[indz[i],:] = wi[2:end]
@@ -153,30 +93,23 @@ function alpha_estimator(data::model)
 				sum_bz += (bz[i, :] - bz[j, :])
 			end
 		end
-		αz[k,:] = sum_bz / norm(sum_bz) # this is not alpha, or alpha / ca 
-
-		theta_z = zeros(nz, p)
-		for i in 1:nz
-			loss(w) = sum(ρ.(yz .- az[i] - (Xz - Xz[i, :])*(w[(p + 1):end] .+ sum(w[1:p] .* αz[k, :])), τ) .* KerVal[:, i])
-			res = optimfunc(loss, zeros(2*p))
-			wi = res.minimizer
-			cz[i,:] = wi[1:p]
-			Cz[indz[i],:] = wi[1:p]
-			theta_z[i,:] = wi[(p + 1):end]
-		end
-		θz[k, :] = sum(theta_z, dims = 1)/nz
+		αz[k,:] = sum_bz / norm(sum_bz) # norm(α)
 
 		push!(sign_alpha, sign.(αz[k, :])) 
 		α += abs.(αz[k, :]) * nz / n
-		θ += θz[k, :] * nz / n
+
 	end
 	c, d, sign_alpha = collection(sign_alpha)
 
-	alpha = α.* sign_alpha[1]
-	if sum(alpha) < 0
-		alpha = -alpha
+	alpha_local = α.* sign_alpha[1]
+	sum_Bz = zeros(p)
+	for i in 1:n - 1
+		for j in i + 1:n
+			sum_Bz += (Bz[i, :] - Bz[j, :])
+		end
 	end
-	alpha,  Bz # Cz
+	alpha_global = sum_Bz / norm(sum_Bz)
+	alpha_global, alpha_local,  Bz , αz # Cz
 
 end
 
@@ -190,8 +123,8 @@ function dgz(v, vz, yz, τ)
 	nz = length(vz)
 	h = 2*nz^(-0.4)
 	KerVal = ker(v .- vz, h)
-	tar_dgz(w) = sum(ρ.(yz .- w[1] - (v .- vz) * w[2], τ) .* KerVal)
-	res = optimfunc(tar_dgz, zeros(2))
+	loss_dgz(w) = sum(ρ.(yz .- w[1] - (v .- vz) * w[2], τ) .* KerVal)
+	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
 	wi = res.minimizer
 	dgz = wi[2]
 
@@ -271,7 +204,7 @@ function Gz_DGz(v, Z, y)
 		for i in 1:nz
 
 			tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- vz[i]) * w[2]) .* KerVal[:, i])
-			res = optimfunc(tar_alpha, zeros(2))
+			res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2))
 			wi = res.minimizer
 			dgz[i] = wi[2]
 			DGz[indz[i]] = wi[2]
@@ -285,8 +218,29 @@ function Gz_DGz(v, Z, y)
 
 end
 
-function beta_estimator()
-	
+function beta_estimator(data::model, alpha, gamma)
+    v = data.X * alpha # g(Xα + Zγ) => univar func. g(v + zγ) after α was determined and  Z = z
+    categ, index = data.categ, data.index
+    g, dg = qgplsim.Gz_DGz(v, data.Z, data.y - v) # g: g(v), dg: g'(v)
+    n = length(data.y)
+    
+    nij = n*(n - 1)/2
+    nij = Int(nij)
+    am = zeros(nij)
+    bm = zeros(nij)
+    zm = zeros(nij, 2)
+    c = 1
+    for i in 1:n - 1
+        for j in  (i + 1):n
+            zm[c, :] = data.Z[j, :] - data.Z[i, :]
+
+            am[c] = g[j] - g[i]
+            bm[c] = dg[i].*(transpose(zm[c, :]) * gamma)
+            c += 1
+        end
+    end
+    beta = inv(transpose(zm) * (zm)) * transpose(zm) * am + mean(bm) * gamma
+    beta
 end
 
 end # module
