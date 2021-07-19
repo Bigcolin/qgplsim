@@ -1,19 +1,24 @@
 include("DGP.ji")
 include("qgplsim.ji")
-α = [-1, 2] # single index for x
-θ = [2, 1]  # linear for x, <α, θ> = 0 for identification
-# γ = [0, 0]
-# β = [0, -0]
-γ = [1, 2] # single index for z
-β = [1, -0.5] # linear for z
+import Base.Threads.@Threads
 
+α = [1.0, -1.0] # single index for x
+θ = [1.0, 1.0]  # linear for x, <α, θ> = 0 for identification
+γ = [0.001, 0.001] # single index for z
+β = [0.5, -1.0] # linear for z
 # Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 
-n = 500
+n = 250
+fx = 1 # y = f(x), fx for different f(x)     
+                # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
+                # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
+ifz = true # if false, Z = 0, i.e. no category varible
+X, Z, y = dgp(n, γ, θ, α, β, fx, ifz)
 # p = length(α)
 # q = length(γ)
-
 τ = 0.5
-X, Z, y = dgp(n, γ, θ, α, β, true)
-model1 = qgplsim.model(X, Z, y)
-@time alpha, theta, gamma = qgplsim.estimator(model1)
+
+# Estimation 
+
+model1 = qgplsim.model(X, Z, y, τ)
+@time alpha, theta, gamma, beta = qgplsim.estimator(model1)

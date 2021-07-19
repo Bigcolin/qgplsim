@@ -1,0 +1,19 @@
+include("DGP.ji")
+include("qgplsim.ji")
+α = [-1, 2] # single index for x
+θ = [2, 1]  # linear for x, <α, θ> = 0 for identification
+# γ = [0, 0]
+# β = [0, -0]
+γ = [1, 2] # single index for z
+β = [1, -0.5] # linear for z
+
+# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
+
+n = 500
+# p = length(α)
+# q = length(γ)
+
+τ = 0.5
+X, Z, y = dgp(n, γ, θ, α, β, true)
+model1 = qgplsim.model(X, Z, y)
+@time alpha, theta, gamma = qgplsim.estimator(model1)
