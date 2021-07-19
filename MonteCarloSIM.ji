@@ -1,8 +1,9 @@
 include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
+using DataFrames, CSV
 
-function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 1)
+function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
     fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
@@ -56,16 +57,29 @@ function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 1)
 
 
 end
+function simulation()
+	α = [1.0, 0.5] # single index for x
+	θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
+	# γ = [1.0, 0.5] # single index for z
+	β = [1.0, -0.5] # linear for z
+	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
+	# n = 400
+	alpha_type = 1
+	@threads for n in [200, 400, 600, 800]
 
-# α = [1.0, -1.0] # single index for x
-# θ = [1.0, 1.0]  # linear for x, <α, θ> = 0 for identification
-# γ = [0.001, 0.001] # single index for z
-# β = [0.5, -1.0] # linear for z
-# # Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
+	df = DataFrame(α1 = Float64[], α2 = Float64[],
+		var_α1 = Float64[], var_α2 = Float64[],    
+		θ1 = Float64[], θ2 = Float64[],
+		var_θ1 = Float64[], var_θ2 = Float64[], 
+		β1 = Float64[], β2 = Float64[],
+		var_β1 = Float64[], var_β2 = Float64[], 
+		γ1 = Float64[], γ2 = Float64[],
+		var_γ1 = Float64[], var_γ2 = Float64[])
 
-# n = 250
-
-
-# alpha_type = 1
-
-# @time Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, alpha_type)
+		for γ in [[1.0, 0.5], [1.0, 0.0], [0.0, 1.0], [0.5, 1.0], [0.0001, 0.0001]]
+			res =  MonteCarlo(n, γ, θ, α, β, alpha_type)
+			push!(df, res)
+		end
+		CSV.write("$n.csv", df)
+	end
+end
