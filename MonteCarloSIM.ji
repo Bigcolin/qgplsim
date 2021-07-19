@@ -1,7 +1,7 @@
 include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
-using DataFrames, CSV
+using Statistics, DataFrames, CSV
 
 function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
     fx = 1 # y = f(x), fx for different f(x)     
