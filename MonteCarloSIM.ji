@@ -7,6 +7,7 @@ function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
     fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
+    dist = 1 # 1 for Cauchy, 0 for Gauss
     ifz = true # if false, Z = 0, i.e. no category varible
     τ = 0.5
     p = length(α)
@@ -18,7 +19,7 @@ function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
     len = Int(100//nthreads)
     @threads for i in 1:nthreads # parallel on threads 
             for j in 1:len # each 25
-        X, Z, y = dgp(n, γ, θ, α, β, fx, ifz)
+        X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
         Alpha0[len*(i - 1) + j, :], Theta0[len*(i - 1) + j, :],
@@ -57,7 +58,7 @@ function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
 
 
 end
-function simulation()
+function simulation(n::Int)
 	α = [1.0, 0.5] # single index for x
 	θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
@@ -65,7 +66,6 @@ function simulation()
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
 	alpha_type = 1
-	@threads for n in [200, 400, 600, 800]
 
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    
@@ -76,10 +76,9 @@ function simulation()
 		γ1 = Float64[], γ2 = Float64[],
 		var_γ1 = Float64[], var_γ2 = Float64[])
 
-		for γ in [[1.0, 0.5], [1.0, 0.0], [0.0, 1.0], [0.5, 1.0], [0.0001, 0.0001]]
-			res =  MonteCarlo(n, γ, θ, α, β, alpha_type)
+		@threads for γ in [[1.0, 0.5], [1.0, 0.0], [0.0, 1.0], [0.5, 1.0], [0.0001, 0.0001], [0.5, 0.5]]
+			res =  MonteCarlo(n, γ, θ, α, β, alpha_type, 1)
 			push!(df, res)
 		end
 		CSV.write("$n.csv", df)
-	end
 end

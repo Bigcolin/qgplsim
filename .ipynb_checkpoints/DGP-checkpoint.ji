@@ -1,3 +1,5 @@
+using Distributions
+
 function discret_var(n)
     a = rand(n)
     z1 = a .> 0.5
@@ -8,10 +10,13 @@ function discret_var(n)
     z = [z1 z2]
 end
 
-function dgp(nSample, γ, θ, α, β, z = true)
-    p = length(α)
-    ϵ = randn(nSample)
-    X = randn(nSample, p)
+function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
+    if d == 0
+        ϵ = randn(nSample)
+    else
+        ϵ = rand(Cauchy(), nSample)
+    end
+    X = randn(nSample, 2)
     if z
         Z = discret_var(nSample)
     else
@@ -20,5 +25,10 @@ function dgp(nSample, γ, θ, α, β, z = true)
 
     y1 = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
     y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
-    X, Z, y2
+    if fy ==1
+        y = y1
+    else 
+        y = y2
+    end
+    X, Z, y
 end
