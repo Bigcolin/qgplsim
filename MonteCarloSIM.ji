@@ -2,31 +2,30 @@ include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
 using Statistics, DataFrames, CSV
+using ProgressBars
 
-function MonteCarlo(n, γ, θ, α, β, alpha_type, nthreads = 4)
-    fx = 1 # y = f(x), fx for different f(x)     
+function MonteCarlo(n, γ, θ, α, β, fx = 1, dist = 1, alpha_type = 1)
+    # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
-    dist = 1 # 1 for Cauchy, 0 for Gauss
+    # dist = 1 # 1 for Cauchy, 0 for Gauss
     ifz = true # if false, Z = 0, i.e. no category varible
     τ = 0.5
     p = length(α)
-    t = time()
+    # t = time()
     Theta0 = zeros(100, p)
     Alpha0 = zeros(100, p)
     Gamma0 = zeros(100, p)
     Beta0 = zeros(100, p)
-    len = Int(100//nthreads)
-    @threads for i in 1:nthreads # parallel on threads 
-            for j in 1:len # each 25
+    len = 100
+    for j in tqdm(1:len) # each 25
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
-        Alpha0[len*(i - 1) + j, :], Theta0[len*(i - 1) + j, :],
-        Gamma0[len*(i - 1) + j, :],Beta0[len*(i - 1) + j, :] = qgplsim.estimator(model_ij, alpha_type)
-        end
+        Alpha0[j, :], Theta0[j, :],
+        Gamma0[j, :], Beta0[j, :] = qgplsim.estimator(model_ij, alpha_type)
     end
-    println("MC Computing time: ", time() - t)
+    # println("MC Computing time: ", time() - t)
 
     set_alpha, dc, mc = qgplsim.collection(sign.(Alpha0))
     Alpha1 = Alpha0[dc[mc], :]
@@ -65,7 +64,6 @@ function simulation(n::Int)
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
-	alpha_type = 1
 
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    
@@ -77,7 +75,7 @@ function simulation(n::Int)
 		var_γ1 = Float64[], var_γ2 = Float64[])
 
 		@threads for γ in [[1.0, 0.5], [1.0, 0.0], [0.0, 1.0], [0.5, 1.0], [0.0001, 0.0001], [0.5, 0.5]]
-			res =  MonteCarlo(n, γ, θ, α, β, alpha_type, 1)
+			res =  MonteCarlo(n, γ, θ, α, β)
 			push!(df, res)
 		end
 		CSV.write("$n.csv", df)

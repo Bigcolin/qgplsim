@@ -1,8 +1,0 @@
-include("model.ji")
-import Base.Threads.@threads
-
-nSim = 100
-Theta = zeros(nSim, 2)
-@threads for i in 1:nSim
-    Theta[i,:] = main(i, 1000)
-       end
