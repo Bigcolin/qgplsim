@@ -4,7 +4,7 @@ import Base.Threads.@threads
 using Statistics, DataFrames, CSV
 using ProgressBars
 
-function MonteCarlo(n, γ, θ, α, β, fx = 1, dist = 1, alpha_type = 1)
+function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, alpha_type = 1)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
@@ -32,7 +32,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 1, dist = 1, alpha_type = 1)
     Theta1 = Theta0[dc[mc], :]
     Gamma1 = Gamma0[dc[mc], :]
     Beta1 = Beta0[dc[mc], :]
-#     Alpha, Theta, Gamma, Beta = Alpha1, Theta1, Gamma1, Beta1
+    # Alpha, Theta, Gamma, Beta = Alpha1, Theta1, Gamma1, Beta1
     Alpha, Theta, Gamma, Beta = Alpha0, Theta0, Gamma0, Beta0
 
     ns, = size(Alpha)
@@ -57,7 +57,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 1, dist = 1, alpha_type = 1)
 
 
 end
-function simulation(n::Int)
+function simulation(n::Int, fx = 2)
 	α = [1.0, 0.5] # single index for x
 	θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
@@ -74,8 +74,8 @@ function simulation(n::Int)
 		γ1 = Float64[], γ2 = Float64[],
 		var_γ1 = Float64[], var_γ2 = Float64[])
 
-		@threads for γ in [[1.0, 0.5], [1.0, 0.0], [0.0, 1.0], [0.5, 1.0], [0.0001, 0.0001], [0.5, 0.5]]
-			res =  MonteCarlo(n, γ, θ, α, β)
+		for γ in [[1.0, 0.5], [1.0, 0.001], [0.001, 1.0], [0.5, 1.0], [0.001, 0.001], [0.5, 0.5]]
+			res =  MonteCarlo(n, γ, θ, α, β, fx)
 			push!(df, res)
 		end
 		CSV.write("$n.csv", df)

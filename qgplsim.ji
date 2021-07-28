@@ -179,8 +179,8 @@ function gamma_estimator(data::model, alpha, theta)
 	end
 	c0 = minimum(C0)
 	c1 = maximum(C1)
-	println("v0: ", v0, " v1: ", v1)
-	println("c0: ", c0, " c1: ", c1)
+	# println("v0: ", v0, " v1: ", v1)
+	# println("c0: ", c0, " c1: ", c1)
 
 	dg1(u) = dg(u, 1)
 	ΔJ = ΔJ .- glquad(dg1, v0, v1, c0, c1)
