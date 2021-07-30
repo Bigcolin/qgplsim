@@ -31,15 +31,17 @@ end
 
 function estimator(data::model, alpha_type = 1)
 	alpha_g, alpha_l, dGz, = alpha_estimator(data)
-	
+    
 	if alpha_type == 0
-		alpha = [1.0, -0.5]	
+		alpha = [1.0, 0.5]	
+        theta = [1.0, -2.0]
 	elseif alpha_type == 1
 		alpha = alpha_g
+        theta = theta_estimator(alpha_g, dGz)
 	elseif alpha_type == 2 
 		alpha = alpha_l
+        theta = theta_estimator(alpha_l, dGz)
 	end
-	theta = theta_estimator(alpha, dGz)
 	if sum(abs.(data.Z)) < 1  # no Z 
 		gamma = 0
 	else
@@ -70,7 +72,7 @@ function alpha_estimator(data::model)
 		yz = y[indz]
 		Xz = X[indz, :]
 		KerVal = zeros(nz, nz)
-		h = 2 * ones(p) .* nz^(-1 / (p + 4))
+		h = 2 * ones(p) .* nz^(-1 / (p + 6))
 		for i in 1:nz
             		Xi = Xz - Xz[i, :]
 			KerVal[:, i] = ker(Xi, h)
