@@ -34,7 +34,7 @@ function estimator(data::model, alpha_type = 1)
     
 	if alpha_type == 0
 		alpha = [1.0, 0.5]	
-        theta = [1.0, -2.0]
+        theta = [1.0  2.0]
 	elseif alpha_type == 1
 		alpha = alpha_g
         theta = theta_estimator(alpha_g, dGz)
@@ -74,8 +74,9 @@ function alpha_estimator(data::model)
 		KerVal = zeros(nz, nz)
 		h = 2 * ones(p) .* nz^(-1 / (p + 6))
 		for i in 1:nz
-            		Xi = Xz - Xz[i, :]
-			KerVal[:, i] = ker(Xi, h)
+            Xi = Xz - Xz[i, :]
+			# Xi = -Xi
+            KerVal[:, i] = ker(Xi, h)
 
 		# the accuracy of alpha plays the mvp in qgplsim, so 
 		# we move the estimation of alpha to localLinear_quantReg.ji
@@ -111,7 +112,7 @@ function alpha_estimator(data::model)
 		end
 	end
 	alpha_global = sum_Bz / norm(sum_Bz)
-	alpha_global = sign.(alpha_global)[1] .* alpha_global
+	# alpha_global = sign.(alpha_global)[1] .* alpha_global
 	alpha_global, alpha_local,  Bz , αz # Cz
 
 end
@@ -126,8 +127,8 @@ end
 function dgz(v, vz, yz, τ)
 	nz = length(vz)
 	h = 2*nz^(-0.15)
-	KerVal = ker(v .- vz, h)
-	loss_dgz(w) = sum(ρ.(yz .- w[1] - (v .- vz) * w[2], τ) .* KerVal)
+	KerVal = ker(vz .- v, h)
+	loss_dgz(w) = sum(ρ.(yz .- w[1] - (vz .- v) * w[2], τ) .* KerVal)
 	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
 	wi = res.minimizer
 	dgz = wi[2]
@@ -191,9 +192,6 @@ function gamma_estimator(data::model, alpha, theta)
 		ΔJ[k] += glquad(dgk, v0, v1, c0, c1)
 	end
 	gamma = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔJ /(c1 - c0)
-	if sum(gamma) < 0
-		gamma = - gamma
-	end
 	gamma
 
 end

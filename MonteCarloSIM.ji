@@ -4,7 +4,7 @@ import Base.Threads.@threads
 using Statistics, DataFrames, CSV
 using ProgressBars
 
-function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, alpha_type = 1)
+function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type = 1)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
@@ -12,12 +12,11 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, alpha_type = 1)
     ifz = true # if false, Z = 0, i.e. no category varible
     τ = 0.5
     p = length(α)
-    # t = time()
-    Theta0 = zeros(100, p)
-    Alpha0 = zeros(100, p)
-    Gamma0 = zeros(100, p)
-    Beta0 = zeros(100, p)
-    len = 100
+    # t = time() 
+    Theta0 = zeros(len, p)
+    Alpha0 = zeros(len, p)
+    Gamma0 = zeros(len, p)
+    Beta0 = zeros(len, p)
     for j in tqdm(1:len) # each 25
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
@@ -53,7 +52,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, alpha_type = 1)
               :var_γ1 => varg[1], :var_γ2 => varg[2],
               :var_β1 => varb[1], :var_β2 => varb[2])
 
-    res
+    res, Alpha, Gamma
 
 
 end
