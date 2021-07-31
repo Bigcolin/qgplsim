@@ -1,7 +1,7 @@
 include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
-using Statistics, DataFrames, CSV
+using Statistics, Clustering, DataFrames, CSV
 using ProgressBars
 
 function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type = 1)
@@ -15,8 +15,8 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
     # t = time() 
     Theta0 = zeros(len, p)
     Alpha0 = zeros(len, p)
-    Gamma0 = zeros(len, p)
-    Beta0 = zeros(len, p)
+    Gamma0 = zeros(len, 2)
+    Beta0 = zeros(len, 2)
     for j in tqdm(1:len) # each 25
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
@@ -26,22 +26,29 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
     end
     # println("MC Computing time: ", time() - t)
 
-    set_alpha, dc, mc = qgplsim.collection(sign.(Alpha0))
-    Alpha1 = Alpha0[dc[mc], :]
-    Theta1 = Theta0[dc[mc], :]
-    Gamma1 = Gamma0[dc[mc], :]
-    Beta1 = Beta0[dc[mc], :]
     # Alpha, Theta, Gamma, Beta = Alpha1, Theta1, Gamma1, Beta1
     Alpha, Theta, Gamma, Beta = Alpha0, Theta0, Gamma0, Beta0
-
-    ns, = size(Alpha)
-    alpha = sum(Alpha, dims = 1)/ns
-    theta = sum(Theta, dims = 1)/ns
-    gamma = sum(Gamma, dims = 1)/ns
-    beta = sum(Beta, dims = 1)/ns
-    vara = var(Alpha, dims = 1)
+    Ra = kmeans(transpose(Alpha), 2)
+    Rg = kmeans(transpose(Gamma), 2)
+    ind1 = Ra.assignments .== 1
+    ind2 = Ra.assignments .== 2
+    Alpha1 = Alpha[ind1, :]
+    Alpha2 = Alpha[ind2, :]
+    Gamma1 = Gamma[ind1, :]
+    Gamma2 = Gamma[ind2, :]
+    n1 = sum(ind1)
+    n2 = len - n1
+    alpha1 = abs.(sum(Alpha1, dims = 1))
+    alpha2 = abs.(sum(Alpha2, dims = 1))
+    gamma1 = abs.(sum(Gamma1, dims = 1))
+    gamma2 = abs.(sum(Gamma2, dims = 1))
+    alpha = (alpha1 + alpha2) / len
+    gamma = (gamma1 + gamma2) / len
+    theta = sum(Theta, dims = 1)/len
+    beta = sum(Beta, dims = 1)/len
+    vara = (var(Alpha1, dims = 1) * n1 + var(Alpha2, dims = 1) * n2)/len
+    varg = (var(Gamma1, dims = 1) * n1 + var(Gamma2, dims = 1) * n2)/len
     vart = var(Theta, dims = 1)
-    varg = var(Gamma, dims = 1)
     varb = var(Beta, dims = 1)
     res = Dict(:α1 => alpha[1], :α2 => alpha[2],
               :θ1 => theta[1], :θ2 => theta[2],
@@ -52,7 +59,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
               :var_γ1 => varg[1], :var_γ2 => varg[2],
               :var_β1 => varb[1], :var_β2 => varb[2])
 
-    res, Alpha, Gamma
+    res, Alpha, Gamma, Theta, Beta
 
 
 end

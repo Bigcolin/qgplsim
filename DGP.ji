@@ -16,7 +16,8 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     else
         ϵ = rand(Cauchy(), nSample)
     end
-    X = randn(nSample, 2)
+    d = length(α)
+    X = randn(nSample, d)
     if z
         Z = discret_var(nSample)
     else
