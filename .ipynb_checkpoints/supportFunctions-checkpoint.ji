@@ -1,0 +1,75 @@
+
+using Distributions
+
+distribution_ker = Normal(0, 1)
+
+function ker(x)
+    pdf(distribution_ker, x)
+end
+
+function ker(x::Vector, h::Float64)
+	ker.(x/h)/h
+end
+
+function ker(x::Vector, h::Vector)
+    d = length(x)
+    v = 1
+    for i in 1:d 
+        v *= ker(x[i]/h[i])/h[i]
+    end
+    v
+end
+
+function ker(X::Matrix, h::Vector)
+    n, p = size(X)
+    v = zeros(n)
+    for i in 1:n
+        v[i] = ker(X[i, :], h)
+    end
+    v
+end
+
+ρ(x, α = 0.5) = abs(x) + (2α - 1)x
+
+function collection(c)
+    n,  = size(c)
+    categ_c = []
+    dict_c = Dict()
+    for i in 1:n
+        if c[i, :] in categ_c
+            push!(dict_c[c[i, :]], i)
+        else
+            push!(categ_c, c[i, :])
+            dict_c[c[i, :]] = [i]
+        end
+    end
+    most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c, categ_c[most_c]
+end
+
+function glquad(g, v0, v1, c0, c1, ng::Int = 11)
+	
+	if ng == 11
+
+	      knots = [0, -0.9782, -0.8871, -0.7302, -0.5191, -0.2695, 0.9782, 0.8871, 0.7302, 0.5191, 0.2695]
+	      weigtht = [ 0.2729, 0.0557, 0.1256, 0.1863, 0.2332, 0.2628, 0.0557, 0.1256, 0.1863, 0.2332, 0.2628]
+
+	elseif ng == 8
+
+	      knots = [-0.4801,    -0.3983,   -0.2628,   -0.0917,    0.0917,    0.2628,    0.3983,    0.4801] .* 2
+	      weigtht = [0.1012,       0.22240,   0.3137,    0.3627,    0.3627,    0.3137,    0.2224,    0.1012]         
+
+	elseif ng == 6
+		
+	      knots = [-0.93246951,-0.66120939, -0.23861919,  0.23861919,  0.66120939,  0.93246951]
+	      weigtht = [0.17132449,   0.36076157,  0.46791393,  0.46791393,  0.36076157,  0.17132449]     
+
+
+	end
+
+	v = (knots .+ 1)./2 .* (v1 - v0) .+ v0
+	gv = g.(v) 
+
+	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
+	transpose(gv_) * weigtht
+end
