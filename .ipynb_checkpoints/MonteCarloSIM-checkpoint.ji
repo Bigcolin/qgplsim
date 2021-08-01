@@ -63,7 +63,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
 
 
 end
-function simulation(n::Int, fx = 2)
+function simulation(n::Int, fx = 2, dist = 0)
 	α = [1.0, 0.5] # single index for x
 	θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
@@ -81,7 +81,7 @@ function simulation(n::Int, fx = 2)
 		var_γ1 = Float64[], var_γ2 = Float64[])
 
 		@threads for γ in [[1.0, 0.5], [1.0, 0.001], [0.001, 1.0], [0.5, 1.0], [0.001, 0.001], [0.5, 0.5]]
-			res, =  MonteCarlo(n, γ, θ, α, β, fx)
+			res, =  MonteCarlo(n, γ, θ, α, β, fx, dist)
 			push!(df, res)
 		end
 		CSV.write("$n.csv", df)
