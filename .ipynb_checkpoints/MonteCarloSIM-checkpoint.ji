@@ -84,5 +84,5 @@ function simulation(n::Int, fx = 2, dist = 0)
 			res, =  MonteCarlo(n, γ, θ, α, β, fx, dist)
 			push!(df, res)
 		end
-		CSV.write("$n f$fx.csv", df)
+		CSV.write("$n_f$fx.csv", df)
 end
