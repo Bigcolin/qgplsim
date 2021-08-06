@@ -1,0 +1,33 @@
+module localLinear_quantReg
+using Distributions, Optim
+include("supportFunctions.ji")
+
+
+function optimfunc(f, init_value, tols = 1e-4)
+    res = optimize(f, init_value, method=BFGS(), f_tol=tols)
+    return res 
+end
+
+struct npqr_model
+	X::Matrix
+	y::Vector
+	n::Int
+	d::Int
+
+	function npqr_model(y, X)
+		n, d = size(X)
+		new(X, y, n, d) 
+	
+	end
+end
+
+function fit(md::npqr_model, KerVal, τ = 0.5, tols = 1e-4)
+	X = md.X
+	y = md.y
+	lossfunc(w) = sum(ρ.(y .- w[1] - X * w[2:end], τ) .* KerVal)
+	res = optimize(lossfunc, zeros(md.d + 1), method = BFGS(), f_tol = tols)
+	res.minimizer
+	
+end
+
+end
