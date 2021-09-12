@@ -169,24 +169,24 @@ function gamma_estimator(data::model, alpha, theta)
 		v_ = v1 # vk[vk .> v1]
 		_v = v0 # vk[vk .< v0]
 		if _v == []
-			C0[k] = 1e5
+			C0[k] = -1e5
 		else
-			C0[k] = minimum(dg.(_v, k))
+			C0[k] = maximum(dg.(_v, k))
 		end
 		
 		if v_ == []
-			C1[k] = -1e5
+			C1[k] = 1e5
 		else
-			C1[k] = maximum(dg.(v_, k))
+			C1[k] = minimum(dg.(v_, k))
 		end
 	end
-	c0 = minimum(C0)
-	c1 = maximum(C1)
+	c0 = maximum(C0)
+	c1 = minimum(C1)
 	# println("v0: ", v0, " v1: ", v1)
 	# println("c0: ", c0, " c1: ", c1)
 
 	dg1(u) = dg(u, 1)
-    ord_gl = 11
+    	ord_gl = 11
 	ΔJ = ΔJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
 	for k in 1:ncateg - 1
 		dgk(u) = dg(u, k + 1)

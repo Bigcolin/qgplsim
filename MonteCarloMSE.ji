@@ -17,7 +17,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
     Alpha0 = zeros(len, p)
     Gamma0 = zeros(len, 2)
     Beta0 = zeros(len, 2)
-    for j in tqdm(1:len) # each 25
+    @threads for j in tqdm(1:len) # each 25
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
@@ -28,60 +28,52 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, len = 100, alpha_type =
 
     # Alpha, Theta, Gamma, Beta = Alpha1, Theta1, Gamma1, Beta1
     Alpha, Theta, Gamma, Beta = Alpha0, Theta0, Gamma0, Beta0
-    Ra = kmeans(transpose(Alpha), 2)
-    Rg = kmeans(transpose(Gamma), 2)
-    ind1 = Ra.assignments .== 1
-    ind2 = Ra.assignments .== 2
-    Alpha1 = Alpha[ind1, :]
-    Alpha2 = Alpha[ind2, :]
-    Gamma1 = Gamma[ind1, :]
-    Gamma2 = Gamma[ind2, :]
-    n1 = sum(ind1)
-    n2 = len - n1
-    alpha1 = abs.(sum(Alpha1, dims = 1))
-    alpha2 = abs.(sum(Alpha2, dims = 1))
-    gamma1 = abs.(sum(Gamma1, dims = 1))
-    gamma2 = abs.(sum(Gamma2, dims = 1))
-    alpha = (alpha1 + alpha2) / len
-    gamma = (gamma1 + gamma2) / len
-    theta = sum(Theta, dims = 1)/len
-    beta = sum(Beta, dims = 1)/len
-    vara = (var(Alpha1, dims = 1) * n1 + var(Alpha2, dims = 1) * n2)/len
-    varg = (var(Gamma1, dims = 1) * n1 + var(Gamma2, dims = 1) * n2)/len
-    vart = var(Theta, dims = 1)
-    varb = var(Beta, dims = 1)
-    res = Dict(:α1 => alpha[1], :α2 => alpha[2],
-              :θ1 => theta[1], :θ2 => theta[2],
-              :γ1 => gamma[1], :γ2 => gamma[2],
-              :β1 => beta[1], :β2 => beta[2],
-              :var_α1 => vara[1], :var_α2 => vara[2],
-              :var_θ1 => vart[1], :var_θ2 => vart[2],
-              :var_γ1 => varg[1], :var_γ2 => varg[2],
-              :var_β1 => varb[1], :var_β2 => varb[2])
-
-    res, Alpha, Gamma, Theta, Beta
-
+    Alpha, Theta, Gamma, Beta
 
 end
 function simulation(n::Int, fx = 2, dist = 0)
 	α = [1.0, 2.0] # single index for x
+    len_α = sqrt(5)
 	θ = [2.0, -1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
 
-	df = DataFrame(α1 = Float64[], α2 = Float64[],
-		var_α1 = Float64[], var_α2 = Float64[],    
-		θ1 = Float64[], θ2 = Float64[],
-		var_θ1 = Float64[], var_θ2 = Float64[], 
-		β1 = Float64[], β2 = Float64[],
-		var_β1 = Float64[], var_β2 = Float64[], 
-		γ1 = Float64[], γ2 = Float64[],
-		var_γ1 = Float64[], var_γ2 = Float64[])
+	df = DataFrame(α = Float64[], var_α = Float64[],    
+		           θ1 = Float64[], θ2 = Float64[],
+		           var_θ1 = Float64[], var_θ2 = Float64[], 
+		           β1 = Float64[], β2 = Float64[],
+		           var_β1 = Float64[], var_β2 = Float64[], 
+		           γ1 = Float64[], γ2 = Float64[],
+		           var_γ1 = Float64[], var_γ2 = Float64[])
 
 		for γ in [[0.0, 0.0], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [1.0, 4.0], [0.001, 1.0], [2.0, 1.0], [4.0, 1.0]]
-			res, =  MonteCarlo(n, γ, θ, α, β, fx, dist)
+            Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, fx, dist)
+                        
+            Γ = repeat(transpose(γ), rep, 1)
+	        Β = repeat(transpose(β), rep, 1)
+            Θ = repeat(transpose(θ), rep, 1)
+
+            cosm2 = m2(Alpha, α)
+            sign_α = sign.(cosm2)
+            sinm2 = 1 .- cosm2.^2
+
+            mean_α, var_α = mean(sinm2), var(sinm2)
+            Δγ = Gamma .* sign_α - Γ
+            mean_γ, var_γ = mean(Δγ, dims = 1), var(Δγ, dims = 1)
+            Δβ = Beta - Β
+            mean_β, var_β = mean(Δβ, dims = 1), var(Δβ, dims = 1)
+            Δθ = Theta - Θ
+            mean_θ, var_θ = mean(Δθ, dims = 1), var(Δθ, dims = 1)
+
+            res = Dict(:α => mean_α, :var_α => var_α,
+                      :θ1 => mean_θ[1], :θ2 => mean_θ[2],
+                      :γ1 => mean_γ[1], :γ2 => mean_γ[2],
+                      :β1 => mean_β[1], :β2 => mean_β[2],
+                      :var_θ1 => var_θ[1], :var_θ2 => var_θ[2],
+                      :var_γ1 => var_γ[1], :var_γ2 => var_γ[2],
+                      :var_β1 => var_β[1], :var_β2 => var_β[2])
 			push!(df, res)
 		end
 		CSV.write("$n f$fx d$dist.csv", df)
@@ -101,7 +93,7 @@ function main(N = [250 300 500 600],
     end
     
     @threads for s in set
-        simulation(s[1],  s[2], s[3])       
+        simulation(s[1], s[2], s[3])       
     end
 
 end

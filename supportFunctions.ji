@@ -1,5 +1,5 @@
 
-using Distributions
+using Distributions, LinearAlgebra, Statistics
 
 distribution_ker = Normal(0, 1)
 
@@ -76,4 +76,10 @@ function glquad(g, v0, v1, c0, c1, ng::Int = 5)
 
 	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
 	transpose(gv_) * weigtht * 2
+end
+
+function m2(a::Matrix, b::Vector)
+
+    cosm2 = a * b / (norm(b))
+
 end
