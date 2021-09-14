@@ -1,3 +1,4 @@
+include("supportFunctions.ji")
 include("MonteCarloMSE.ji")
 import Base.Threads.@threads
 
@@ -16,7 +17,7 @@ ifz = true # if false, Z = 0, i.e. no category varible
 dist = 0 # Cauchy or Gauss
 alpha_type = 1
 rep = 100
-Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep, alpha_type)
+# Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep, alpha_type)
 
             Γ = repeat(transpose(γ), rep, 1)
 	    Β = repeat(transpose(β), rep, 1)
@@ -27,11 +28,11 @@ Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep, alpha_
             sinm2 = 1 .- cosm2.^2
 
             mean_α, var_α = mean(sinm2), var(sinm2)
-            Δγ = Gamma .* sign_α - Γ
+            Δγ = abs.(Gamma .* sign_α - Γ).^2
             mean_γ, var_γ = mean(Δγ, dims = 1), var(Δγ, dims = 1)
-            Δβ = Beta - Β
+            Δβ = Beta - Β  # abs.(Beta - Β).^2
             mean_β, var_β = mean(Δβ, dims = 1), var(Δβ, dims = 1)
-            Δθ = Theta - Θ
+            Δθ = Theta - Θ  # abs.(Theta - Θ).^2
             mean_θ, var_θ = mean(Δθ, dims = 1), var(Δθ, dims = 1)
 
             res = Dict(:α => mean_α, :var_α => var_α,
