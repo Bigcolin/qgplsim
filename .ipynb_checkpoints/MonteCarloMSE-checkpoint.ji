@@ -52,7 +52,7 @@ function simulation(n::Int, fx = 2, dist = 0, rep = 100)
 		@threads for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 0.5], [0.001, 1.0], [0.5, 1.0]]
             g1, g2 = γ[1], γ[2]
             Alpha, Theta, Gamma, Beta =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep)
-            matwrite("./simulation_mse/records/$n f$fx d$dist $g1 $g2.mat", 
+            matwrite("./simulation_2/records/$n f$fx d$dist $g1 $g2.mat", 
                      Dict("Alpha" => Alpha, "Theta" => Theta, "Gamma" => Gamma, "Beta" => Beta))
 
                         
@@ -82,7 +82,7 @@ function simulation(n::Int, fx = 2, dist = 0, rep = 100)
                        :var_β1 => var_β[1], :var_β2 => var_β[2])
 			push!(df, res)
 		end
-		CSV.write("./simulation_mse/$n f$fx d$dist.csv", df)
+		CSV.write("./simulation_2/$n f$fx d$dist.csv", df)
 end
 
 function main(N = [400 800],
