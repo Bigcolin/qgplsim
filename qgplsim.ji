@@ -69,8 +69,17 @@ function alpha_estimator(data::model)
 		bz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
+		# xzmin = minimum(Xz, dims=1)
+		# xzmax = maximum(Xz, dims=1)
+		# ht = xzmax - xzmin
+		# println(ht)
+		# hh = 1
+		# for i in 1:p
+		# 	hh = hh * ht[i]
+		# end
 		KerVal = zeros(nz, nz)
-		h = 2 * ones(p) .* nz^(-1 / (p + 4))
+		h = 2 * ones(p) .* nz^(-2 / (p + 4))
+		
 		for i in 1:nz
             Xi = Xz - Xz[i, :]
 			# Xi = -Xi
@@ -87,12 +96,12 @@ function alpha_estimator(data::model)
 
 		end
 	end
-	
+
 	sum_Bz = zeros(p)
-	for i in 1:Int(n/2)
-		for j in (Int(n/2) + 1):n
+	for i in 1:n - 1 # Int(n/2)
+		for j in (i + 1) : n # (Int(n/2) + 1):n
 			bz = Bz[i, :] - Bz[j, :]
-			sum_Bz += bz / norm(bz)
+			sum_Bz += bz / norm(bz) ./ sign(bz[1])
 		end
 	end
 	alpha_global = sum_Bz / norm(sum_Bz)
@@ -110,7 +119,11 @@ end
 
 function dgz(v, vz, yz, τ)
 	nz = length(vz)
-	h = 2*nz^(-0.2)
+	vmin = minimum(vz)
+	vmax = maximum(vz)
+	hv = vmax - vmin
+	h = nz^(-0.4) * hv / 2
+	println(h)
 	KerVal = ker(vz .- v, h)
 	loss_dgz(w) = sum(ρ.(yz .- w[1] - (vz .- v) * w[2], τ) .* KerVal)
 	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
