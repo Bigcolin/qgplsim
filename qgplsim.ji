@@ -30,17 +30,15 @@ struct model
 end
 
 function estimator(data::model, alpha_type = 1)
-	alpha_g, alpha_l, dGz, = alpha_estimator(data)
+	alpha_g,  dGz, = alpha_estimator(data)
     
 	if alpha_type == 0
 		alpha = [1.0, 0.5]	
-        theta = [1.0  2.0]
+        theta = [1.0  -2.0]
 	elseif alpha_type == 1
 		alpha = alpha_g
         theta = theta_estimator(alpha_g, dGz)
-	elseif alpha_type == 2 
-		alpha = alpha_l
-        theta = theta_estimator(alpha_l, dGz)
+
 	end
 	if sum(abs.(data.Z)) < 1  # no Z 
 		gamma = 0
@@ -85,35 +83,20 @@ function alpha_estimator(data::model)
 			modeli = localLinear_quantReg.npqr_model(yz, Xi)
 			wi = localLinear_quantReg.fit(modeli, KerVal, τ)
 			az[i] = wi[1]
-			bz[i,:] = wi[2:end]
 			Bz[indz[i],:] = wi[2:end]
 
 		end
 
-		sum_bz = zeros(p)
-		for i in 1:nz - 1
-			for j in i + 1:nz
-				sum_bz += (bz[i, :] - bz[j, :])
-			end
-		end
-		αz[k,:] = sum_bz / norm(sum_bz) # norm(α)
-
-		push!(sign_alpha, sign.(αz[k, :])) 
-		α += abs.(αz[k, :]) * nz / n
-
-	end
-	c, d, sign_alpha = collection(sign_alpha)
-
-	alpha_local = α.* sign_alpha[1]
 	sum_Bz = zeros(p)
 	for i in 1:Int(n/2)
 		for j in (Int(n/2) + 1):n
-			sum_Bz += (Bz[i, :] - Bz[j, :])
+			bz = Bz[i, :] - Bz[j, :]
+			sum_Bz += bz / norm(bz)
 		end
 	end
 	alpha_global = sum_Bz / norm(sum_Bz)
 	# alpha_global = sign.(alpha_global)[1] .* alpha_global
-	alpha_global, alpha_local,  Bz , αz # Cz
+	alpha_global, Bz , αz # Cz
 
 end
 
