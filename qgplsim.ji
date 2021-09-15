@@ -86,7 +86,8 @@ function alpha_estimator(data::model)
 			Bz[indz[i],:] = wi[2:end]
 
 		end
-
+	end
+	
 	sum_Bz = zeros(p)
 	for i in 1:Int(n/2)
 		for j in (Int(n/2) + 1):n
@@ -236,7 +237,7 @@ function beta_estimator(data::model, alpha, theta, gamma)
     for i in 1:n - 1
         for j in  (i + 1):n
             zm[c, :] = data.Z[j, :] - data.Z[i, :]
-	    um[c] = u[j] - u[i]
+			um[c] = u[j] - u[i]
             am[c] = a[j] - a[i]
             bm[c] = b[i].*(transpose(zm[c, :]) * gamma + v[j] - v[i]) 
             c += 1

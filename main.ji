@@ -13,17 +13,5 @@ fx = 2 # y = f(x), fx for different f(x)
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
 ifz = true #if false, Z = 0, i.e. no category varible
 dist = 1 # Cauchy or Gauss
-rep = 100  
-res =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep)
-
-
-df = DataFrame(α1 = Float64[], α2 = Float64[],
-               var_α1 = Float64[], var_α2 = Float64[],    
-               θ1 = Float64[], θ2 = Float64[],
-               var_θ1 = Float64[], var_θ2 = Float64[], 
-               β1 = Float64[], β2 = Float64[],
-               var_β1 = Float64[], var_β2 = Float64[], 
-               γ1 = Float64[], γ2 = Float64[],
-               var_γ1 = Float64[], var_γ2 = Float64[])
-
-    push!(df, res)
+rep = 20  
+alpha, gamma, theta, beta =  MonteCarlo(n, γ, θ, α, β, fx, dist, rep)
