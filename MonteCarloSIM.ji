@@ -18,7 +18,7 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, rep = 100)
     Alpha0 = zeros(rep, p)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
-    @threads for j in tqdm(1:rep) 
+    for j in tqdm(1:rep) 
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
@@ -47,7 +47,7 @@ function simulation(n::Int, fx = 2, dist = 0)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		for γ in [[0.0, 0.0], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]
+		for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]]
 		
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
             alpha = mean(Alpha, dims = 1)
