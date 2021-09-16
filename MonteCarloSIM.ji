@@ -40,38 +40,24 @@ function simulation(n::Int, fx = 2, dist = 0)
 
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    
+		γ1 = Float64[], γ2 = Float64[],
+		var_γ1 = Float64[], var_γ2 = Float64[],
 		θ1 = Float64[], θ2 = Float64[],
 		var_θ1 = Float64[], var_θ2 = Float64[], 
 		β1 = Float64[], β2 = Float64[],
-		var_β1 = Float64[], var_β2 = Float64[], 
-		γ1 = Float64[], γ2 = Float64[],
-		var_γ1 = Float64[], var_γ2 = Float64[])
+		var_β1 = Float64[], var_β2 = Float64[])
 
-		for γ in [[0.0, 0.0], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [1.0, 4.0], [0.001, 1.0], [2.0, 1.0], [4.0, 1.0]]
+		for γ in [[0.0, 0.0], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]
 		
-            Alpha, Theta, Gamma, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
-            Ra = kmeans(transpose(Alpha), 2)
-            Rg = kmeans(transpose(Gamma), 2)
-            ind1 = Ra.assignments .== 1
-            ind2 = Ra.assignments .== 2
-            Alpha1 = Alpha[ind1, :]
-            Alpha2 = Alpha[ind2, :]
-            Gamma1 = Gamma[ind1, :]
-            Gamma2 = Gamma[ind2, :]
-            n1 = sum(ind1)
-            n2 = rep - n1
-            alpha1 = abs.(sum(Alpha1, dims = 1))
-            alpha2 = abs.(sum(Alpha2, dims = 1))
-            gamma1 = abs.(sum(Gamma1, dims = 1))
-            gamma2 = abs.(sum(Gamma2, dims = 1))
-            alpha = (alpha1 + alpha2) / rep
-            gamma = (gamma1 + gamma2) / rep
-            theta = sum(Theta, dims = 1)/rep
-            beta = sum(Beta, dims = 1)/rep
-            vara = (var(Alpha1, dims = 1) * n1 + var(Alpha2, dims = 1) * n2)/rep
-            varg = (var(Gamma1, dims = 1) * n1 + var(Gamma2, dims = 1) * n2)/rep
+            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
+            alpha = mean(Alpha, dims = 1)
+            beta = mean(Beta, dims = 1)
+            gamma = mean(Gamma, dims = 1)
+            theta = mean(Theta, dims = 1)
+            vara = var(Alpha, dims = 1)
             vart = var(Theta, dims = 1)
             varb = var(Beta, dims = 1)
+            varg = var(Gamma, dims = 1)
             res = Dict(:α1 => alpha[1], :α2 => alpha[2],
                     :θ1 => theta[1], :θ2 => theta[2],
                     :γ1 => gamma[1], :γ2 => gamma[2],
