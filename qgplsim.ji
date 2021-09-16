@@ -3,6 +3,8 @@ module qgplsim
 include("supportFunctions.ji")
 include("localLinear_quantReg.ji")
 using Optim, LinearAlgebra, Distributions, Random, Statistics
+using Clustering
+
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
     for i in 1:n
@@ -97,15 +99,29 @@ function alpha_estimator(data::model)
 		end
 	end
 
-	sum_Bz = zeros(p)
+    nij = Int(n * (n - 1) / 2)
+    bz = zeros(nij, p)
+    ij = 1
 	for i in 1:n - 1 # Int(n/2)
 		for j in (i + 1) : n # (Int(n/2) + 1):n
-			bz = Bz[i, :] - Bz[j, :]
-			sum_Bz += bz / norm(bz) ./ sign(bz[1])
-		end
+			bz[ij, :] = Bz[i, :] - Bz[j, :]
+            ij = ij + 1
+
+        end
 	end
-	alpha_global = sum_Bz / norm(sum_Bz)
-	# alpha_global = sign.(alpha_global)[1] .* alpha_global
+    
+    Rbz = kmeans(bz |> transpose, 2)
+    ind1 = Rbz.assignments .== 1
+    ind2 = Rbz.assignments .== 2
+    bz1 = bz[ind1, :]
+    bz2 = bz[ind2, :]
+    n1 = sum(ind1)
+    n2 = nij - n1
+    bz1 = abs.(sum(bz1, dims = 1))
+    bz2 = abs.(sum(bz2, dims = 1))
+    sum_Bz = transpose((bz1 + bz2) / nij)
+	alpha_global = sum_Bz / norm(sum_Bz) 
+	# alpha_global = 1 / alpha_global[1] .* alpha_global
 	alpha_global, Bz , αz # Cz
 
 end
@@ -123,7 +139,7 @@ function dgz(v, vz, yz, τ)
 	vmax = maximum(vz)
 	hv = vmax - vmin
 	h = nz^(-0.4) * hv / 2
-	println(h)
+	# println(h)
 	KerVal = ker(vz .- v, h)
 	loss_dgz(w) = sum(ρ.(yz .- w[1] - (vz .- v) * w[2], τ) .* KerVal)
 	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
@@ -168,13 +184,13 @@ function gamma_estimator(data::model, alpha, theta)
 		if _v == []
 			C0[k] = -1e5
 		else
-			C0[k] = maximum(dg.(_v, k))
+			C0[k] = minimum(dg.(_v, k))
 		end
 		
 		if v_ == []
 			C1[k] = 1e5
 		else
-			C1[k] = minimum(dg.(v_, k))
+			C1[k] = maximum(dg.(v_, k))
 		end
 	end
 	c0 = maximum(C0)

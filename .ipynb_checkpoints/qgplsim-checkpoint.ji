@@ -3,6 +3,8 @@ module qgplsim
 include("supportFunctions.ji")
 include("localLinear_quantReg.ji")
 using Optim, LinearAlgebra, Distributions, Random, Statistics
+using Clustering
+
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
     for i in 1:n
@@ -30,17 +32,15 @@ struct model
 end
 
 function estimator(data::model, alpha_type = 1)
-	alpha_g, alpha_l, dGz, = alpha_estimator(data)
+	alpha_g,  dGz, = alpha_estimator(data)
     
 	if alpha_type == 0
 		alpha = [1.0, 0.5]	
-        theta = [1.0  2.0]
+        theta = [1.0  -2.0]
 	elseif alpha_type == 1
 		alpha = alpha_g
         theta = theta_estimator(alpha_g, dGz)
-	elseif alpha_type == 2 
-		alpha = alpha_l
-        theta = theta_estimator(alpha_l, dGz)
+
 	end
 	if sum(abs.(data.Z)) < 1  # no Z 
 		gamma = 0
@@ -71,8 +71,17 @@ function alpha_estimator(data::model)
 		bz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
+		# xzmin = minimum(Xz, dims=1)
+		# xzmax = maximum(Xz, dims=1)
+		# ht = xzmax - xzmin
+		# println(ht)
+		# hh = 1
+		# for i in 1:p
+		# 	hh = hh * ht[i]
+		# end
 		KerVal = zeros(nz, nz)
-		h = 2 * ones(p) .* nz^(-1 / (p + 4))
+		h = 2 * ones(p) .* nz^(-2 / (p + 4))
+		
 		for i in 1:nz
             Xi = Xz - Xz[i, :]
 			# Xi = -Xi
@@ -85,35 +94,35 @@ function alpha_estimator(data::model)
 			modeli = localLinear_quantReg.npqr_model(yz, Xi)
 			wi = localLinear_quantReg.fit(modeli, KerVal, τ)
 			az[i] = wi[1]
-			bz[i,:] = wi[2:end]
 			Bz[indz[i],:] = wi[2:end]
 
 		end
-
-		sum_bz = zeros(p)
-		for i in 1:nz - 1
-			for j in i + 1:nz
-				sum_bz += (bz[i, :] - bz[j, :])
-			end
-		end
-		αz[k,:] = sum_bz / norm(sum_bz) # norm(α)
-
-		push!(sign_alpha, sign.(αz[k, :])) 
-		α += abs.(αz[k, :]) * nz / n
-
 	end
-	c, d, sign_alpha = collection(sign_alpha)
 
-	alpha_local = α.* sign_alpha[1]
-	sum_Bz = zeros(p)
-	for i in 1:Int(n/2)
-		for j in (Int(n/2) + 1):n
-			sum_Bz += (Bz[i, :] - Bz[j, :])
-		end
+    nij = Int(n * (n - 1) / 2)
+    bz = zeros(nij, p)
+    ij = 1
+	for i in 1:n - 1 # Int(n/2)
+		for j in (i + 1) : n # (Int(n/2) + 1):n
+			bz[ij, :] = Bz[i, :] - Bz[j, :]
+            ij = ij + 1
+
+        end
 	end
-	alpha_global = sum_Bz / norm(sum_Bz)
-	# alpha_global = sign.(alpha_global)[1] .* alpha_global
-	alpha_global, alpha_local,  Bz , αz # Cz
+    
+    Rbz = kmeans(bz |> transpose, 2)
+    ind1 = Rbz.assignments .== 1
+    ind2 = Rbz.assignments .== 2
+    bz1 = bz[ind1, :]
+    bz2 = bz[ind2, :]
+    n1 = sum(ind1)
+    n2 = nij - n1
+    bz1 = abs.(sum(bz1, dims = 1))
+    bz2 = abs.(sum(bz2, dims = 1))
+    sum_Bz = transpose((bz1 + bz2) / nij)
+	alpha_global = sum_Bz / norm(sum_Bz) 
+	# alpha_global = 1 / alpha_global[1] .* alpha_global
+	alpha_global, Bz , αz # Cz
 
 end
 
@@ -126,7 +135,11 @@ end
 
 function dgz(v, vz, yz, τ)
 	nz = length(vz)
-	h = 2*nz^(-0.2)
+	vmin = minimum(vz)
+	vmax = maximum(vz)
+	hv = vmax - vmin
+	h = nz^(-0.4) * hv / 2
+	# println(h)
 	KerVal = ker(vz .- v, h)
 	loss_dgz(w) = sum(ρ.(yz .- w[1] - (vz .- v) * w[2], τ) .* KerVal)
 	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
@@ -171,13 +184,13 @@ function gamma_estimator(data::model, alpha, theta)
 		if _v == []
 			C0[k] = -1e5
 		else
-			C0[k] = maximum(dg.(_v, k))
+			C0[k] = minimum(dg.(_v, k))
 		end
 		
 		if v_ == []
 			C1[k] = 1e5
 		else
-			C1[k] = minimum(dg.(v_, k))
+			C1[k] = maximum(dg.(v_, k))
 		end
 	end
 	c0 = maximum(C0)
@@ -253,7 +266,7 @@ function beta_estimator(data::model, alpha, theta, gamma)
     for i in 1:n - 1
         for j in  (i + 1):n
             zm[c, :] = data.Z[j, :] - data.Z[i, :]
-	    um[c] = u[j] - u[i]
+			um[c] = u[j] - u[i]
             am[c] = a[j] - a[i]
             bm[c] = b[i].*(transpose(zm[c, :]) * gamma + v[j] - v[i]) 
             c += 1
