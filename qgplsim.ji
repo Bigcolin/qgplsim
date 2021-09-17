@@ -43,12 +43,11 @@ function estimator(data::model, alpha_type = 1)
 
 	end
 	if sum(abs.(data.Z)) < 1  # no Z 
-		gamma = 0
+		gamma, beta = 0, 0
 	else
-		gamma = gamma_estimator(data, alpha, theta)
+		gamma, beta = z_estimator(data, alpha, theta)
 	end
     
-    beta = beta_estimator(data, alpha, theta, gamma)
 	alpha, gamma, theta, beta
 end
 
@@ -133,7 +132,7 @@ function theta_estimator(alpha, Bz)
 	theta / n
 end
 
-function dgz(v, uz, vz, yz, τ)
+function dgz(v, vz, yz, d, τ)
 	nz = length(vz)
 	vmin = minimum(vz)
 	vmax = maximum(vz)
@@ -145,75 +144,119 @@ function dgz(v, uz, vz, yz, τ)
 	res = localLinear_quantReg.optimfunc(loss_dgz, zeros(2))
 	wi = res.minimizer
 	dgz = wi[2]
-
-	# gz= wi[1]
-	dgz
+	gz= wi[1]
+	if d == 0
+		return gz
+	else
+		return dgz
+	end
 end
 
-function gamma_estimator(data::model, alpha, theta)
+function z_estimator(data::model, alpha, theta)
 	v = data.X * alpha
+	# max_v = maximum(v)
+	# min_v = minimum(v)
     u = data.X * transpose(theta)
-	y = data.y  - data.X * transpose(theta)
+	y = data.y  - u
 	τ = data.quantileNum
-	categ, index = data.categ, data.index
+	index = deepcopy(data.index)
+	categ = collect(index)
 	ncateg = index.count
-	ΔJ = zeros(ncateg - 1)
-	ΔZ = transpose(hcat(categ...))
-	ΔZ = ΔZ[2:end, :] - ΔZ[1, :]
+	vv0, vv1 = -1e5, 1e5
 	v0, v1 = -1e5, 1e5
-	C0 = zeros(ncateg)
-	C1 = zeros(ncateg)
-	dg(vv, k) = dgz(vv, u[index[categ[k]]], v[index[categ[k]]], y[index[categ[k]]], τ)
+	c0, c1 = 1, -1
+	while ncateg > 3 && c0 > c1
 
-	for k in 1:ncateg
-		vk = v[index[categ[k]]]
-		vmin = minimum(vk)
-		vmax = maximum(vk)
-		if v0 < vmin
-			v0 = vmin
-		end
+		dg(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1,  τ)
+		C0 = zeros(ncateg)
+		C1 = zeros(ncateg)
+		for k in 1:ncateg
+			vk = v[categ[k][2]]
+			vmin = minimum(vk)
+			vmax = maximum(vk)
+			if vv0 < vmin
+				vv0 = vmin
+			end
 
-		if v1 > vmax
-			v1 = vmax
+			if vv1 > vmax
+				vv1 = vmax
+			end
 		end
-	end
-    v0 = v0 + 0.4
-    v1 = v1 - 0.4
+		v0 = vv0 + 0.35 # 0.3 = h 
+		v1 = vv1 - 0.35
+		println(v0, " ", v1)
 
-	for k in 1:ncateg
-		vk = v[index[categ[k]]]
-		v_ = v1 # vk[vk .> v1]
-		_v = v0 # vk[vk .< v0]
-		if _v == []
-			C0[k] = -1e5
-		else
-			C0[k] = (dg.(_v, k))
-		end
+			for k in 1:ncateg
+				# vk = v[index[categ[k]]]
+				v_ = v1 # vk[vk .> v1]
+				_v = v0 # vk[vk .< v0]
+				if _v == []
+					C0[k] = -1e5
+				else
+					C0[k] = (dg.(_v, k))
+				end
+				
+				if v_ == []
+					C1[k] = 1e5
+				else
+					C1[k] = (dg.(v_, k))
+				end
+			end
 		
-		if v_ == []
-			C1[k] = 1e5
-		else
-			C1[k] = (dg.(v_, k))
-		end
-	end
-	c0 = maximum(C0)
-	c1 = minimum(C1)
-	# println("v0: ", v0, " v1: ", v1)
-	# println("c0: ", c0, " c1: ", c1)
 
-	dg1(u) = dg(u, 1)
+			c0 = maximum(C0)
+			c1 = minimum(C1)
+			# println("v0: ", v0, " v1: ", v1)
+			# println("c0: ", c0, " c1: ", c1)
+			cc = C0 + C1
+			# kmax = argmax(cc)
+			kmin = argmin(cc)
+			if c0 > c1
+				delete!(index, categ[kmin][1])
+			end
+			ncateg = index.count
+			categ = collect(index)
+
+	end # while 
+	println(c0, " ", c1)
+	println(ncateg)
+	# println(v0, " ", v1, "\n",  c0, " ", c1)
+	ΔdJ = zeros(ncateg - 1)
+	ΔZ = transpose(hcat(keys(index)...))
+	ΔZ = ΔZ[2:end, :] - ΔZ[1, :]
+	dgv(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1, τ)
+	dg1(u) = dgv(u, 1)
     	ord_gl = 5
-	ΔJ = ΔJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
+	ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
 	for k in 1:ncateg - 1
-		dgk(u) = dg(u, k + 1)
-		ΔJ[k] += glquad(dgk, v0, v1, c0, c1, ord_gl)
+		dgk(u) = dgv(u, k + 1)
+		ΔdJ[k] += glquad(dgk, v0, v1, c0, c1, ord_gl)
 	end
-	gamma = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔJ /(c1 - c0)
+	gamma = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔdJ /(c1 - c0)
 	gamma
 
+	# estimation for β
+	gv(vv, k) =dgz(vv, v[categ[k][2]], y[categ[k][2]], 0, τ)
+	nij = Int((ncateg - 1)*ncateg/2)
+	g1(u) = gv(u, 1)
+	
+	ΔJ = zeros(ncateg - 1)
+	ΔJ = ΔJ .- glquad(g1, v0, v1, -1e5, 1e5, ord_gl)
+
+	for k in 1:ncateg - 1
+		gk(u) = gv(u, k + 1)
+		ΔJ[k] += glquad(gk, v0, v1, -1e5, 1e5, ord_gl)
+		ΔJ[k] -= glquad(dg1, v0, v1, -1e5, 1e5, ord_gl) * sum(ΔZ[k, :] .* gamma)
+
+	end
+
+	beta = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔJ /(v1 - v0)
+	gamma, beta
 end
 
 function Gz_DGz(v, Z, y, tau = 0.5, hp = -0.4)
+	# Estimate Q(y) = g(v + Zγ)
+	# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
 	n, q = size(Z)
 	categ, index, = collection(Z)
@@ -254,40 +297,5 @@ function Gz_DGz(v, Z, y, tau = 0.5, hp = -0.4)
 
 end
 
-function beta_estimator(data::model, alpha, theta, gamma)
-    v = data.X * alpha # g(Xα + Zγ) => univar func. g(v + zγ) after α was determined and  Z = z
-    u = data.X * transpose(theta)
-    categ, index = data.categ, data.index
-    a, b = qgplsim.Gz_DGz(v, data.Z, data.y - u) # g: g(v), dg: g'(v)
-    n = length(data.y)
-    
-    nij = n*(n - 1)/2
-    nij = Int(nij)
-    am = zeros(nij)
-    um = zeros(nij)
-    # vm = zeros(nij)
-    bm = zeros(nij)
-    zm = zeros(nij, 2)
-    c = 0
-    for i in 1:n - 1
-        for j in  (i + 1):n
-            dz = data.Z[j, :] - data.Z[i, :]
-            if norm(dz) > 1e-3
-                c = c + 1
-                zm[c, :] = dz
-                um[c] = u[j] - u[i]
-                am[c] = a[j] - a[i]
-                bm[c] = b[i].*(transpose(zm[c, :]) * gamma + v[j] - v[i]) 
-            end
-        end
-    end
-    
-    zm = zm[1:c, :]
-    um = um[1:c, :]
-    bm = bm[1:c, :]
-    am = am[1:c, :]
-    beta = inv(transpose(zm) * (zm)) * transpose(zm) * (am - bm) # - um
-    beta
-end
 
 end # module
