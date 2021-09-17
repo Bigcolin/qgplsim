@@ -22,8 +22,8 @@ function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, rep = 100)
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
-        Alpha0[j, :], Theta0[j, :],
-        Gamma0[j, :], Beta0[j, :] = qgplsim.estimator(model_ij, alpha_type)
+        Alpha0[j, :], Gamma0[j, :],
+        Theta0[j, :], Beta0[j, :] = qgplsim.estimator(model_ij, alpha_type)
     end
 
     Alpha0, Gamma0, Theta0, Beta0
