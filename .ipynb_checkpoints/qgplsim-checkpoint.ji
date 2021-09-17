@@ -177,6 +177,8 @@ function gamma_estimator(data::model, alpha, theta)
 			v1 = vmax
 		end
 	end
+    v0 = v0 + 0.4
+    v1 = v1 - 0.4
 
 	for k in 1:ncateg
 		vk = v[index[categ[k]]]
@@ -211,7 +213,7 @@ function gamma_estimator(data::model, alpha, theta)
 
 end
 
-function Gz_DGz(v, Z, y, hp = -0.2)
+function Gz_DGz(v, Z, y, tau = 0.5, hp = -0.4)
 
 	n, q = size(Z)
 	categ, index, = collection(Z)
@@ -226,15 +228,18 @@ function Gz_DGz(v, Z, y, hp = -0.2)
 		gz = zeros(nz)
 		yz = y[indz]
 		vz = v[indz]
+        vmin = minimum(vz)
+        vmax = maximum(vz)
+        hv = vmax - vmin
 		KerVal = zeros(nz, nz)
-		h = 2*nz^(hp)
+		h = 2*nz^(hp) * hv / 2
 		for i in 1:nz
 			KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
 		end
 
 		for i in 1:nz
 
-			tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- vz[i]) * w[2]) .* KerVal[:, i])
+			tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- vz[i]) * w[2], tau) .* KerVal[:, i])
 			res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2))
 			wi = res.minimizer
 			dgz[i] = wi[2]
@@ -253,7 +258,7 @@ function beta_estimator(data::model, alpha, theta, gamma)
     v = data.X * alpha # g(Xα + Zγ) => univar func. g(v + zγ) after α was determined and  Z = z
     u = data.X * transpose(theta)
     categ, index = data.categ, data.index
-    a, b = qgplsim.Gz_DGz(v, data.Z, data.y) # g: g(v), dg: g'(v)
+    a, b = qgplsim.Gz_DGz(v, data.Z, data.y - u) # g: g(v), dg: g'(v)
     n = length(data.y)
     
     nij = n*(n - 1)/2
@@ -263,17 +268,25 @@ function beta_estimator(data::model, alpha, theta, gamma)
     # vm = zeros(nij)
     bm = zeros(nij)
     zm = zeros(nij, 2)
-    c = 1
+    c = 0
     for i in 1:n - 1
         for j in  (i + 1):n
-            zm[c, :] = data.Z[j, :] - data.Z[i, :]
-			um[c] = u[j] - u[i]
-            am[c] = a[j] - a[i]
-            bm[c] = b[i].*(transpose(zm[c, :]) * gamma + v[j] - v[i]) 
-            c += 1
+            dz = data.Z[j, :] - data.Z[i, :]
+            if norm(dz) > 1e-3
+                c = c + 1
+                zm[c, :] = dz
+                um[c] = u[j] - u[i]
+                am[c] = a[j] - a[i]
+                bm[c] = b[i].*(transpose(zm[c, :]) * gamma + v[j] - v[i]) 
+            end
         end
     end
-    beta = inv(transpose(zm) * (zm)) * transpose(zm) * (am - um - bm)
+    
+    zm = zm[1:c, :]
+    um = um[1:c, :]
+    bm = bm[1:c, :]
+    am = am[1:c, :]
+    beta = inv(transpose(zm) * (zm)) * transpose(zm) * (am - bm) # - um
     beta
 end
 
