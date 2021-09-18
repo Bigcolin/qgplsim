@@ -79,8 +79,8 @@ function alpha_estimator(data::model)
 		# 	hh = hh * ht[i]
 		# end
 		KerVal = zeros(nz, nz)
-		h = 2 * ones(p) .* nz^(-2 / (p + 4))
-		# println("width in alpha :", h)
+		h = 2 * ones(p) .* nz^(-1 / (p + 4))
+		println("width in alpha :", h)
 		for i in 1:nz
             Xi = Xz - Xz[i, :]
 			# Xi = -Xi
