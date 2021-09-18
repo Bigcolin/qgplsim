@@ -17,7 +17,12 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
         ϵ = rand(Cauchy(), nSample)
     end
     d = length(α)
+    # X = (rand(nSample, d) .- 0.5) * 2
     X = randn(nSample, d)
+    minx = minimum(X, dims = 1)
+    maxx = maximum(X, dims = 1)
+    X = X - repeat(minx, n, 1) 
+    X = X ./ (maxx - minx) * 6 .- 3
     if z
         Z = discret_var(nSample)
     else

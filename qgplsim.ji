@@ -153,7 +153,9 @@ function dgz(v, vz, yz, d, τ)
 end
 
 function z_estimator(data::model, alpha, theta)
+	# alpha = alpha ./ alpha[1]
 	v = data.X * alpha
+	n, q = size(data.Z)
 	# max_v = maximum(v)
 	# min_v = minimum(v)
     u = data.X * transpose(theta)
@@ -184,7 +186,7 @@ function z_estimator(data::model, alpha, theta)
 		end
 		v0 = vv0 + 0.35 # 0.3 = h 
 		v1 = vv1 - 0.35
-		println(v0, " ", v1)
+		# println(v0, " ", v1)
 
 			for k in 1:ncateg
 				# vk = v[index[categ[k]]]
@@ -218,26 +220,28 @@ function z_estimator(data::model, alpha, theta)
 			categ = collect(index)
 
 	end # while 
-	println(c0, " ", c1)
-	println(ncateg)
+	# println(c0, " ", c1)
+	# println(ncateg)
 	# println(v0, " ", v1, "\n",  c0, " ", c1)
 	ΔdJ = zeros(ncateg - 1)
 	ΔZ = transpose(hcat(keys(index)...))
 	ΔZ = ΔZ[2:end, :] - ΔZ[1, :]
 	dgv(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1, τ)
 	dg1(u) = dgv(u, 1)
-    	ord_gl = 5
+
+    ord_gl = 11
 	ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
 	for k in 1:ncateg - 1
 		dgk(u) = dgv(u, k + 1)
 		ΔdJ[k] += glquad(dgk, v0, v1, c0, c1, ord_gl)
 	end
-	gamma = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔdJ /(c1 - c0)
-	gamma
+	gamma = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
+	# println("gamma = ", gamma)
+	# gamma = [1.0, 0.5]
 
 	# estimation for β
 	gv(vv, k) =dgz(vv, v[categ[k][2]], y[categ[k][2]], 0, τ)
-	nij = Int((ncateg - 1)*ncateg/2)
+	# nij = Int((ncateg - 1)*ncateg/2)
 	g1(u) = gv(u, 1)
 	
 	ΔJ = zeros(ncateg - 1)
@@ -250,7 +254,7 @@ function z_estimator(data::model, alpha, theta)
 
 	end
 
-	beta = inv(transpose(ΔZ)*ΔZ) * transpose(ΔZ) * ΔJ /(v1 - v0)
+	beta = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔJ /(v1 - v0)
 	gamma, beta
 end
 

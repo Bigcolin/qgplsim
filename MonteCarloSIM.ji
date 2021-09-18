@@ -47,7 +47,7 @@ function simulation(n::Int, fx = 2, dist = 0)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]]
+		@threads for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]]
 		
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
             alpha = mean(Alpha, dims = 1)
