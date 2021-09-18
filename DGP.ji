@@ -21,8 +21,8 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     X = randn(nSample, d)
     minx = minimum(X, dims = 1)
     maxx = maximum(X, dims = 1)
-    X = X - repeat(minx, n, 1) 
-    X = X ./ (maxx - minx) * 10 .- 5
+    X = X - repeat(minx, nSample, 1) 
+    X = X ./ (maxx - minx) * 4 .- 2
     if z
         Z = discret_var(nSample)
     else
