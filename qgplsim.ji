@@ -189,7 +189,7 @@ function z_estimator(data::model, alpha, theta)
 		end
 		v0 = vv0 + 2*h # 0.3 = h 
 		v1 = vv1 - 2*h
-		println("first v: ", v0, " ", v1)
+		# println("first v: ", v0, " ", v1)
 		nh = 0
 		while nh < 30 && c0 > c1 # expand v0, v1, 30  times to find c0 < c1
 			for k in 1:ncateg
@@ -246,9 +246,9 @@ function z_estimator(data::model, alpha, theta)
 	if ncateg == 3 && c0 > c1
 		
 	end
-	println("final c: ", c0, " ", c1)
-	println("final v: ", v0, " ", v1)
-	println(ncateg)
+	# println("final c: ", c0, " ", c1)
+	# println("final v: ", v0, " ", v1)
+	# println(ncateg)
 	# println(v0, " ", v1, "\n",  c0, " ", c1)
 	ΔdJ = zeros(ncateg - 1)
 	ΔZ = transpose(hcat(keys(index)...))
