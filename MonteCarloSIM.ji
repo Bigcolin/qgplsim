@@ -4,13 +4,12 @@ import Base.Threads.@threads
 using DataFrames, CSV
 using ProgressBars
 
-function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, rep = 100)
+function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 100)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
     # dist = 1 # 1 for Cauchy, 0 for Gauss
     ifz = true # if false, Z = 0, i.e. no category varible
-    τ = 0.5
     alpha_type = 1
     p = length(α)
     # t = time() 

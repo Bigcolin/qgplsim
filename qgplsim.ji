@@ -67,20 +67,20 @@ function alpha_estimator(data::model)
 		indz = index[z]
 		nz = length(indz)
 		az = zeros(nz)
-		bz = zeros(nz, p)
+		# bz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
-		# xzmin = minimum(Xz, dims=1)
-		# xzmax = maximum(Xz, dims=1)
-		# ht = xzmax - xzmin
+		xzmin = minimum(Xz, dims=1)
+		xzmax = maximum(Xz, dims=1)
+		ht = xzmax - xzmin
 		# println(ht)
 		# hh = 1
-		# for i in 1:p
-		# 	hh = hh * ht[i]
-		# end
-		KerVal = zeros(nz, nz)
 		h = 2 * ones(p) .* nz^(-1 / (p + 4))
-		println("width in alpha :", h)
+		for i in 1:p
+			h = h * ht[i] / 7
+		end
+		KerVal = zeros(nz, nz)
+		# println("width in alpha :", h)
 		for i in 1:nz
             Xi = Xz - Xz[i, :]
 			# Xi = -Xi
@@ -169,7 +169,7 @@ function z_estimator(data::model, alpha, theta)
 	vv0, vv1 = -1e5, 1e5
 	v0, v1 = -1e5, 1e5
 	c0, c1 = 1, -1
-	_c0, _c1 = 1, -1
+	# _c0, _c1 = 1, -1
 	while ncateg > 3 && c0 > c1
 
 		dg(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1,  τ)
@@ -187,11 +187,11 @@ function z_estimator(data::model, alpha, theta)
 				vv1 = vmax
 			end
 		end
-		v0 = vv0 + 2*h # 0.3 = h 
-		v1 = vv1 - 2*h
+		v0 = vv0 + h # 0.3 = h 
+		v1 = vv1 - h
 		# println("first v: ", v0, " ", v1)
 		nh = 0
-		while nh < 30 && c0 > c1 # expand v0, v1, 30  times to find c0 < c1
+		while nh < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 			for k in 1:ncateg
 				# vk = v[index[categ[k]]]
 				v_ = v1 # vk[vk .> v1]
@@ -269,7 +269,7 @@ function z_estimator(data::model, alpha, theta)
 	end
 	gamma = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
 	# println("gamma = ", gamma)
-	# gamma = [1.0, 0.5]
+	# gamma = [0.5, 0.5]
 	v = v + data.Z * gamma
 	# estimation for β
 	gv(vv, k) =dgz(vv, v[categ[k][2]], y[categ[k][2]], 0, τ)
