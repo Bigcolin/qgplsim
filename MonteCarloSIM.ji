@@ -36,7 +36,8 @@ function simulation(n::Int, fx = 2, dist = 0)
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
-
+    τ = 0.5
+    
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    
 		γ1 = Float64[], γ2 = Float64[],
@@ -48,7 +49,7 @@ function simulation(n::Int, fx = 2, dist = 0)
 
 		for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]]
 		
-            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
+            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
             alpha = mean(Alpha, dims = 1)
             beta = mean(Beta, dims = 1)
             gamma = mean(Gamma, dims = 1)
