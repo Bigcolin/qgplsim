@@ -7,10 +7,9 @@ using Clustering
 
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
-    for i in 1:n
-        X[i, :] = X[i, :] - xi
-    end
-    X
+	Xi = repeat(xi|>transpose, n, 1)
+	_Xi = X - Xi
+    _Xi
 end
 
 struct model
@@ -120,7 +119,7 @@ function alpha_estimator(data::model)
     bz2 = abs.(sum(bz2, dims = 1))
     sum_Bz = transpose((bz1 + bz2) / nij)
 	alpha_global = sum_Bz / norm(sum_Bz) 
-	# alpha_global = 1 / alpha_global[1] .* alpha_global
+	alpha_global = alpha_global ./ alpha_global[1]
 	alpha_global, Bz , αz # Cz
 
 end
@@ -248,9 +247,9 @@ function z_estimator(data::model, alpha, theta)
 
 	end # while 
 
-	if ncateg == 3 && c0 > c1
+	# if ncateg == 3 && c0 > c1
 		
-	end
+	# end
 	# println("final c: ", c0, " ", c1)
 	# println("final v: ", v0, " ", v1)
 	# println(ncateg)
