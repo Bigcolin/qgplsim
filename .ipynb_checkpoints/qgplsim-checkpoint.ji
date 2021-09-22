@@ -7,10 +7,9 @@ using Clustering
 
 function Base.:-(X::Matrix, xi::Vector)
     n, p = size(X)
-    for i in 1:n
-        X[i, :] = X[i, :] - xi
-    end
-    X
+	Xi = repeat(xi|>transpose, n, 1)
+	_Xi = X - Xi
+    _Xi
 end
 
 struct model
@@ -67,20 +66,20 @@ function alpha_estimator(data::model)
 		indz = index[z]
 		nz = length(indz)
 		az = zeros(nz)
-		bz = zeros(nz, p)
+		# bz = zeros(nz, p)
 		yz = y[indz]
 		Xz = X[indz, :]
-		# xzmin = minimum(Xz, dims=1)
-		# xzmax = maximum(Xz, dims=1)
-		# ht = xzmax - xzmin
+		xzmin = minimum(Xz, dims=1)
+		xzmax = maximum(Xz, dims=1)
+		ht = xzmax - xzmin
 		# println(ht)
 		# hh = 1
-		# for i in 1:p
-		# 	hh = hh * ht[i]
-		# end
+		h = 2 * ones(p) .* nz^(-1 / (p + 4))
+		for i in 1:p
+			h = h * ht[i] / 7
+		end
 		KerVal = zeros(nz, nz)
-		h = 2 * ones(p) .* nz^(-2 / (p + 4))
-		
+		# println("width in alpha :", h)
 		for i in 1:nz
             Xi = Xz - Xz[i, :]
 			# Xi = -Xi
@@ -120,7 +119,7 @@ function alpha_estimator(data::model)
     bz2 = abs.(sum(bz2, dims = 1))
     sum_Bz = transpose((bz1 + bz2) / nij)
 	alpha_global = sum_Bz / norm(sum_Bz) 
-	# alpha_global = 1 / alpha_global[1] .* alpha_global
+	alpha_global = alpha_global ./ alpha_global[1]
 	alpha_global, Bz , αz # Cz
 
 end
@@ -169,6 +168,7 @@ function z_estimator(data::model, alpha, theta)
 	vv0, vv1 = -1e5, 1e5
 	v0, v1 = -1e5, 1e5
 	c0, c1 = 1, -1
+	# _c0, _c1 = 1, -1
 	while ncateg > 3 && c0 > c1
 
 		dg(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1,  τ)
@@ -188,8 +188,9 @@ function z_estimator(data::model, alpha, theta)
 		end
 		v0 = vv0 + h # 0.3 = h 
 		v1 = vv1 - h
-		# println(v0, " ", v1)
-
+		# println("first v: ", v0, " ", v1)
+		nh = 0
+		while nh < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 			for k in 1:ncateg
 				# vk = v[index[categ[k]]]
 				v_ = v1 # vk[vk .> v1]
@@ -210,19 +211,47 @@ function z_estimator(data::model, alpha, theta)
 
 			c0 = maximum(C0)
 			c1 = minimum(C1)
-			# println("v0: ", v0, " v1: ", v1)
-			# println("c0: ", c0, " c1: ", c1)
-			cc = C0 + C1
-			# kmax = argmax(cc)
-			kmin = argmin(cc)
-			if c0 > c1
-				delete!(index, categ[kmin][1])
+			
+			# _c0 = minimum(C0) # not for the time being
+			# _c1 = maximum(C1)
+
+			if c0 > c1 
+
+				# if _c0 <= _c1
+					v0 = v0 - h/10
+					v1 = v1 + h/10
+					nh = nh + 1
+				# else # _c0 > _c1
+					# c0 = _c1
+					# c1 = _c0
+					# v1, v0 = v0, v1
+				# end
+			
 			end
-			ncateg = index.count
-			categ = collect(index)
+		end
+		# println("v0: ", v0, " v1: ", v1)
+		# println("c0: ", c0, " c1: ", c1)
+		cc = C0 + C1
+		kmax = argmax(cc)
+		kmin = argmin(cc)
+		if c0 > c1
+			if ncateg > 4
+				delete!(index, categ[kmin][1])
+				# delete!(index, categ[kmax][1])
+			else
+				delete!(index, categ[kmax][1])
+			end
+		end
+		ncateg = index.count
+		categ = collect(index)
 
 	end # while 
-	# println(c0, " ", c1)
+
+	# if ncateg == 3 && c0 > c1
+		
+	# end
+	# println("final c: ", c0, " ", c1)
+	# println("final v: ", v0, " ", v1)
 	# println(ncateg)
 	# println(v0, " ", v1, "\n",  c0, " ", c1)
 	ΔdJ = zeros(ncateg - 1)
@@ -231,7 +260,7 @@ function z_estimator(data::model, alpha, theta)
 	dgv(vv, k) = dgz(vv, v[categ[k][2]], y[categ[k][2]], 1, τ)
 	dg1(u) = dgv(u, 1)
 
-    ord_gl = 11
+    	ord_gl = 5
 	ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
 	for k in 1:ncateg - 1
 		dgk(u) = dgv(u, k + 1)
@@ -239,8 +268,8 @@ function z_estimator(data::model, alpha, theta)
 	end
 	gamma = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
 	# println("gamma = ", gamma)
-	# gamma = [1.0, 0.5]
-
+	# gamma = [0.5, 0.5]
+	v = v + data.Z * gamma
 	# estimation for β
 	gv(vv, k) =dgz(vv, v[categ[k][2]], y[categ[k][2]], 0, τ)
 	# nij = Int((ncateg - 1)*ncateg/2)
@@ -252,11 +281,10 @@ function z_estimator(data::model, alpha, theta)
 	for k in 1:ncateg - 1
 		gk(u) = gv(u, k + 1)
 		ΔJ[k] += glquad(gk, v0, v1, -1e5, 1e5, ord_gl)
-		ΔJ[k] -= glquad(dg1, v0, v1, -1e5, 1e5, ord_gl) * sum(ΔZ[k, :] .* gamma)
 
 	end
 
-	beta = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔJ /(v1 - v0)
+	beta = inv(transpose(ΔZ)*ΔZ + 0.00001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
 	gamma, beta
 end
 

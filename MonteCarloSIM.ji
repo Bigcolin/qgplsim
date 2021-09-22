@@ -29,14 +29,13 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 100)
 
 
 end
-function simulation(n::Int, fx = 2, dist = 0)
+function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 	α = [1.0, 2.0] # single index for x
 	θ = [2.0, -1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
-    τ = 0.5
     
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    

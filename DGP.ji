@@ -2,12 +2,20 @@ using Distributions
 
 function discret_var(n)
     a = rand(n)
-    z1 = a .> 0.5
+    z1 = (a .> 0.5) 
     
     b = rand(n)
     z2 = b .> 0.75
     z2 += b .> 0.25
+    z2 = z2 
     z = [z1 z2]
+
+    # for k in 1:n
+    #     if sum(z[k, :]) > 1
+    #         z[k, :] = z[k, :]./norm(z[k, :])
+    #     end
+    # end
+    z
 end
 
 function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
