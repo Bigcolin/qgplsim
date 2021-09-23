@@ -6,8 +6,7 @@ function discret_var(n)
     
     b = rand(n)
     z2 = b .> 0.75
-    z2 += b .> 0.25
-    z2 = z2 
+    # z2 += b .> 0.25
     z = [z1 z2]
 
     # for k in 1:n

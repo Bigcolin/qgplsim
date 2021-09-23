@@ -11,6 +11,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 100)
     # dist = 1 # 1 for Cauchy, 0 for Gauss
     ifz = true # if false, Z = 0, i.e. no category varible
     alpha_type = 1
+    # len_alpha = norm(α)
     p = length(α)
     # t = time() 
     Theta0 = zeros(rep, p)
