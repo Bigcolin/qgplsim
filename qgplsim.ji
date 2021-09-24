@@ -137,16 +137,16 @@ module qgplsim
 		vmax = maximum(v)
 		vmin = minimum(v)
 		hv = vmax - vmin
+		step = hv / 100
 		# v = (v .- vmin) / hv .* 2 .- 1
 		y = data.y  - data.X * transpose(theta)
 		τ = data.quantileNum
 		index = deepcopy(data.index)
 		categ = collect(index)
 		ncateg = index.count
-		h = (n/ncateg)^(-0.4) * hv / 2
 		# println("hv: ", h)
 		vv0, vv1 = -1e5, 1e5
-		v0, v1 = -1e5, 1e5
+		v0, v1 = vv0, vv1
 		c0, c1 = 1, -1
 		# _c0, _c1 = 1, -1
 		while ncateg > 3 && c0 > c1
@@ -155,8 +155,9 @@ module qgplsim
 			C1 = zeros(ncateg)
 			for k in 1:ncateg
 				vk = v[categ[k][2]]
-				vmin = minimum(vk)
-				vmax = maximum(vk)
+				h = (length(vk))^(-0.17) * var(vk)
+				vmin = minimum(vk) + h
+				vmax = maximum(vk) - h
 				if vv0 < vmin
 					vv0 = vmin
 				end
@@ -165,11 +166,10 @@ module qgplsim
 					vv1 = vmax
 				end
 			end
-			v0 = vv0 + h # 0.3 = h 
-			v1 = vv1 - h
+			v0, v1 = vv0, vv1
 			# println("first v: ", v0, " ", v1)
-			nh = 0
-			while nh < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
+			nstep = 0
+			while nstep < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 				for k in 1:ncateg
 					vk = v[categ[k][2]]
 					yk = y[categ[k][2]]
@@ -183,9 +183,9 @@ module qgplsim
 				c1 = minimum(C1)
 
 				if c0 > c1 
-					v0 = v0 - h/10
-					v1 = v1 + h/10
-					nh = nh + 1
+					v0 = v0 - step
+					v1 = v1 + step
+					nstep = nstep + 1
 				end
 			end
 			# println("v0: ", v0, " v1: ", v1)
@@ -236,8 +236,6 @@ module qgplsim
 		# estimation for β
 		z1 = categ[1][1]
 		ΔJ = zeros(ncateg - 1)
-		v0 = vv0 + h/2
-		v1 = vv1 - h/2
 		
 		vz = v[categ[1][2]]
 		yz = y[categ[1][2]]
@@ -263,7 +261,7 @@ module qgplsim
 		gamma, beta
 	end
 
-	function G(v, Z, y, tau = 0.5, hp = -0.4)
+	function G(v, Z, y, tau = 0.5, hp = -0.17)
 		# Estimate Q(y) = g(v + Zγ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
@@ -272,10 +270,6 @@ module qgplsim
 		ncateg = index.count
 		Gz = zeros(n)
 		DGz = zeros(n)
-		vmin = minimum(v)
-		vmax = maximum(v)
-		hv = vmax - vmin
-		h = (n/ncateg)^(hp) * hv / 2    
 		
 		for k in 1:ncateg
 			z = categ[k]
@@ -285,6 +279,7 @@ module qgplsim
 			gz = zeros(nz)
 			yz = y[indz]
 			vz = v[indz]
+			h = (nz)^(hp) * var(vz)
 			KerVal = zeros(nz, nz)
 
 			for i in 1:nz
@@ -309,7 +304,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.4)
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
@@ -317,10 +312,8 @@ module qgplsim
 		nv = length(v)
 		Gz = zeros(nv)
 		DGz = zeros(nv)
-		vmin = minimum(vz)
-		vmax = maximum(vz)
-		hv = vmax - vmin
-		h = (nz)^(hp) * hv / 2    
+		var_v = var(vz)
+		h = (nz)^(hp) * var_v   
 		
 			KerVal = zeros(nz, nv)
 
