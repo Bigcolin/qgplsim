@@ -85,7 +85,7 @@ function simulation(n::Int, fx = 2, dist = 0, rep = 100)
 		CSV.write("./simulation_mse/$n f$fx d$dist.csv", df)
 end
 
-function main(N = [400 800],
+function main(N = [300 600],
               F = [1 2], D = [0 1])
 
     set = []

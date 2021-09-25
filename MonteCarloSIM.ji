@@ -1,7 +1,7 @@
 include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
-using DataFrames, CSV
+using DataFrames, CSV, MAT
 using ProgressBars
 
 function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
@@ -48,9 +48,12 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		@threads for γ in [[0.001, 0.001], [0.5, 0.001], [0.5, 0.5], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
+		@threads for γ in [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
 		
-            Alpha, Gamma, Theta, Beta, = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
+            g1, g2 = γ[1], γ[2]
+            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
+            matwrite("./simulations/records/$n f$fx d$dist $g1 $g2.mat", 
+                     Dict("Alpha" => Alpha, "Theta" => Theta, "Gamma" => Gamma, "Beta" => Beta))
             alpha = mean(Alpha, dims = 1)
             beta = mean(Beta, dims = 1)
             gamma = mean(Gamma, dims = 1)
@@ -73,7 +76,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		CSV.write("$n f$fx d$dist.csv", df)
 end
 
-function main(N = [250 300 500 600],
+function main(N = [300 600],
               F = [1 2], D = [0 1])
 
     set = []
