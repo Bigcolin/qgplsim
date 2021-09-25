@@ -4,11 +4,11 @@ import Base.Threads.@threads
 α = [1.0, 0.5] # single index for x
 θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
 γ = [0.5, 1.0] # single index for z
-β = [2.0, -1.0] # linear for z
+β = [-1.0, -0.5] # linear for z
 # Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 
 n = 400
-fx = 2 # y = f(x), fx for different f(x)     
+fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
 ifz = true #if false, Z = 0, i.e. no category varible
@@ -19,5 +19,5 @@ model = qgplsim.model(X, Z, y, τ)
 
 # alpha, gamma, theta, beta = qgplsim.estimator(model)
 
-rep = 100  
+rep = 200  
 alpha, gamma, theta, beta =  MonteCarlo(n, γ, θ, α, β, τ, fx, dist, rep)

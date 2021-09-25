@@ -2,11 +2,11 @@ using Distributions
 
 function discret_var(n)
     a = rand(n)
-    z1 = (a .> 0.5) 
+    z1 = (a .> 0.5)
     
     b = rand(n)
-    z2 = b .> 0.75
-    # z2 += b .> 0.25
+    z2 = b .> 0.75 .- 1
+    z2 += b .> 0.25
     z = [z1 z2]
 
     # for k in 1:n

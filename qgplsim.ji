@@ -115,8 +115,13 @@ module qgplsim
 		bz2 = bz[ind2, :]
 		n1 = sum(ind1)
 		n2 = nij - n1
-		bz1 = abs.(sum(bz1, dims = 1))
-		bz2 = abs.(sum(bz2, dims = 1))
+		bz1 = sum(bz1, dims = 1)
+		bz2 = sum(bz2, dims = 1)
+		if bz1[1] > 0
+			bz2 = -bz2
+		else
+			bz1 = -bz1
+		end
 		sum_Bz = transpose((bz1 + bz2) / nij)
 		alpha = sum_Bz / norm(sum_Bz) 
 
@@ -134,6 +139,7 @@ module qgplsim
 		# theta = [2.0 -1.0]
 		v = data.X * alpha
 		n, q = size(data.Z)
+		gamma, beta = zeros(q), zeros(q)
 		vmax = maximum(v)
 		vmin = minimum(v)
 		hv = vmax - vmin
@@ -202,7 +208,6 @@ module qgplsim
 				end
 			end
 			ncateg = index.count
-			categ = collect(index)
 
 		end # while 
 
@@ -212,53 +217,63 @@ module qgplsim
 		# println("final v: ", v0, " ", v1)
 		# println(ncateg)
 		# println(v0, " ", v1, "\n",  c0, " ", c1)
-		ΔdJ = zeros(ncateg - 1)
-		ΔZ = transpose(hcat(keys(index)...))
-		ΔZ = ΔZ[2:end, :] - ΔZ[1, :]
+		for i in 1:ncateg
+			ΔdJ = zeros(ncateg - 1)
+			ΔZ = transpose(hcat(keys(index)...))
+			categ = collect(index)
+			ΔZ = ΔZ[1:end, :] - ΔZ[i, :]
+			tdz = ΔZ[i, :]
+			ΔZ[i, :] = ΔZ[1, :]
+			ΔZ = ΔZ[2:end, :]
 
-		# ord_gl = 5
-		vz = v[categ[1][2]]
-		yz = y[categ[1][2]]
-		dg1(u) = Gz(u, vz, yz, 1, τ)[1]
+			tdc = categ[i, :]
+			categ[i, :] = categ[1, :]
+			categ[1, :] = tdc
+			# ord_gl = 5
+			vz = v[categ[1][2]]
+			yz = y[categ[1][2]]
+			dg1(u) = Gz(u, vz, yz, 1, τ)[1]
 
-		ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
-		for k in 1:ncateg - 1
+			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
+			for k in 1:ncateg - 1
+				
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+				dgk(u) = Gz(u, vk, yk, 1, τ)[1]
+				ΔdJ[k] = ΔdJ[k] + glquad(dgk, v0, v1, c0, c1)
+			end
+			gamma += inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
+			# gamma = [0.5, 1.0]
+
+			# estimation for β
+			z1 = categ[1][1]
+			ΔJ = zeros(ncateg - 1)
 			
-			vk = v[categ[k + 1][2]]
-			yk = y[categ[k + 1][2]]
-			dgk(u) = Gz(u, vk, yk, 1, τ)[1]
-			ΔdJ[k] = ΔdJ[k] + glquad(dgk, v0, v1, c0, c1)
+			vz = v[categ[1][2]]
+			yz = y[categ[1][2]]
+			g1(u) = Gz(u, vz, yz, 0, τ)[1]
+			d1 =  sum(z1 .* gamma)
+			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
+
+			for k in 1:ncateg - 1
+				zk = categ[k][1]
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+				gk(u) = Gz(u, vk , yk, 0, τ)[1]
+				dk = sum(zk .* gamma)
+				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
+
+			end
+
+			ΔZ = - ΔZ
+			# ng = gamma ./ norm(gamma)
+			# beta = ng[end:-1:1] # only for q = 2
+			# beta[1] = -beta[1]
+			# w = ΔJ ./ (ΔZ * beta) / (v1 - v0)
+			# beta = mean(w) .* beta
+			beta += inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
 		end
-		gamma = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
-		#  println("gamma = ", gamma)
-		# gamma = [0.5, 1.0]
-
-		# estimation for β
-		z1 = categ[1][1]
-		ΔJ = zeros(ncateg - 1)
-		
-		vz = v[categ[1][2]]
-		yz = y[categ[1][2]]
-		g1(u) = Gz(u, vz, yz, 0, τ)[1]
-		ΔJ = ΔJ .+ glquad(g1, v0, v1, -1e5, 1e5)
-
-		for k in 1:ncateg - 1
-			zk = categ[k][1]
-			vk = v[categ[k + 1][2]]
-			yk = y[categ[k + 1][2]]
-			gk(u) = Gz(u + sum((z1 - zk).*gamma), vk , yk, 0, τ)[1]
-			ΔJ[k] = ΔJ[k] - glquad(gk, v0, v1, -1e5, 1e5)
-
-		end
-
-		ΔZ = - ΔZ
-		# ng = gamma ./ norm(gamma)
-		# beta = ng[end:-1:1] # only for q = 2
-		# beta[1] = -beta[1]
-		# w = ΔJ ./ (ΔZ * beta) / (v1 - v0)
-		# beta = mean(w) .* beta
-		beta = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
-		gamma, beta
+		gamma/ncateg, beta/ncateg
 	end
 
 	function G(v, Z, y, tau = 0.5, hp = -0.17)
