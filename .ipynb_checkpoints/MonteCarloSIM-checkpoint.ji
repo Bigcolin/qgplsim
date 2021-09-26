@@ -4,40 +4,41 @@ import Base.Threads.@threads
 using DataFrames, CSV
 using ProgressBars
 
-function MonteCarlo(n, γ, θ, α, β, fx = 2, dist = 1, rep = 100)
+function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
     # dist = 1 # 1 for Cauchy, 0 for Gauss
     ifz = true # if false, Z = 0, i.e. no category varible
-    τ = 0.5
     alpha_type = 1
+    # len_alpha = norm(α)
     p = length(α)
     # t = time() 
     Theta0 = zeros(rep, p)
     Alpha0 = zeros(rep, p)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
-    for j in tqdm(1:rep) 
+    Squ0 = zeros(rep)
+    for j in 1:rep
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
         Alpha0[j, :], Gamma0[j, :],
-        Theta0[j, :], Beta0[j, :] = qgplsim.estimator(model_ij, alpha_type)
+        Theta0[j, :], Beta0[j, :], Squ0[j] = qgplsim.estimator(model_ij, alpha_type)
     end
 
-    Alpha0, Gamma0, Theta0, Beta0
-
+    Alpha0, Gamma0, Theta0, Beta0, Squ0
 
 end
-function simulation(n::Int, fx = 2, dist = 0)
+
+function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 	α = [1.0, 2.0] # single index for x
 	θ = [2.0, -1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
-
+    
 	df = DataFrame(α1 = Float64[], α2 = Float64[],
 		var_α1 = Float64[], var_α2 = Float64[],    
 		γ1 = Float64[], γ2 = Float64[],
@@ -47,9 +48,9 @@ function simulation(n::Int, fx = 2, dist = 0)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		for γ in [[0.001, 0.001], [1.0, 0.001], [1.0, 1.0], [1.0, 2.0], [0.001, 1.0], [2.0, 1.0]]
+		@threads for γ in [[0.001, 0.001], [0.5, 0.001], [0.5, 0.5], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
 		
-            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, fx, dist)
+            Alpha, Gamma, Theta, Beta, = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
             alpha = mean(Alpha, dims = 1)
             beta = mean(Beta, dims = 1)
             gamma = mean(Gamma, dims = 1)

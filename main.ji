@@ -7,17 +7,19 @@ import Base.Threads.@threads
 β = [-1.0, -0.5] # linear for z
 # Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 
-n = 400
-fx = 1 # y = f(x), fx for different f(x)     
+n = 200
+fx = 2 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
 ifz = true #if false, Z = 0, i.e. no category varible
 dist = 1 # Cauchy or Gauss
-X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
 τ = 0.5
-model = qgplsim.model(X, Z, y, τ)
+rep = 2  
+# for k in (1:1)
+    Xk, Zk, yk = dgp(n, γ, θ, α, β, fx, dist, ifz)
+    modelk = qgplsim.model(Xk, Zk, yk, τ)
+    alpha, gamma, theta, beta, squ = qgplsim.estimator(modelk)
+    println(gamma, "\n", beta, "\n", squ)
+# end
 
-# alpha, gamma, theta, beta = qgplsim.estimator(model)
-
-rep = 200  
-alpha, gamma, theta, beta =  MonteCarlo(n, γ, θ, α, β, τ, fx, dist, rep)
+# alpha, gamma, theta, beta, Squ =  MonteCarlo(n, γ, θ, α, β, τ, fx, dist, rep)
