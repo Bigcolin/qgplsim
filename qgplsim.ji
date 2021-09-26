@@ -47,7 +47,7 @@ module qgplsim
 			gamma, beta, squ = z_estimator(data, alpha, theta)
 		end
 		
-		alpha, gamma, theta, beta, squ
+		return alpha, gamma, theta, beta, squ
 	end
 
 	function x_estimator(data::model)
@@ -142,20 +142,16 @@ module qgplsim
 		gamma, beta = zeros(q), zeros(q)
 		vmax = maximum(v)
 		vmin = minimum(v)
-		hv = vmax - vmin
-		step = hv / 100
-		# v = (v .- vmin) / hv .* 2 .- 1
 		y = data.y  - data.X * transpose(theta)
 		τ = data.quantileNum
 		index = deepcopy(data.index)
 		categ = collect(index)
 		ncateg = index.count
-		# println("hv: ", h)
 		vv0, vv1 = -1e5, 1e5
-		v0, v1 = vv0, vv1
+		v0, v1 = -1e5, 1e5
 		c0, c1 = 1, -1
 		# _c0, _c1 = 1, -1
-		while ncateg > 3 && c0 > c1
+		# while ncateg > 3 && c0 > c1
 
 			C0 = zeros(ncateg)
 			C1 = zeros(ncateg)
@@ -173,8 +169,8 @@ module qgplsim
 				end
 			end
 			v0, v1 = vv0, vv1
-			# println("first v: ", v0, " ", v1)
 			nstep = 0
+            step = (v1 - v0)/20
 			while nstep < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 				for k in 1:ncateg
 					vk = v[categ[k][2]]
@@ -188,33 +184,33 @@ module qgplsim
 				c0 = maximum(C0)
 				c1 = minimum(C1)
 
+                # println("c: ", c0, ", ", c1)
+                # println("v: ", v0, ", ", v1)
 				if c0 > c1 
-					v0 = v0 - step
-					v1 = v1 + step
-					nstep = nstep + 1
-				end
-			end
-			# println("v0: ", v0, " v1: ", v1)
-			# println("c0: ", c0, " c1: ", c1)
-			cc = C0 + C1
-			kmax = argmax(cc)
-			kmin = argmin(cc)
-			if c0 > c1
-				if ncateg > 4
-					delete!(index, categ[kmin][1])
-					# delete!(index, categ[kmax][1])
-				else
-					delete!(index, categ[kmax][1])
-				end
-			end
-			ncateg = index.count
+		 			v0 = v0 - step
+		 			v1 = v1 + step
+                    nstep = nstep + 1
+		 		end
+		 	end
+		# 	cc = C0 + C1
+		# 	kmax = argmax(cc)
+		# 	kmin = argmin(cc)
+		# 	if c0 > c1
+		# 		if ncateg > 4
+		# 			delete!(index, categ[kmin][1])
+		# 			# delete!(index, categ[kmax][1])
+		# 		else
+		# 			delete!(index, categ[kmax][1])
+		# 		end
+		# 	end
+		# 	ncateg = index.count
 
-		end # while 
+		# end # while 
 
 		# if ncateg == 3 && c0 > c1
 		# end
-		# println("c1 - c0: ", c1 - c0)
-		# println("v1 - v0: ", v1 - v0)
+		# println("test")
+		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
 			ΔZ = transpose(hcat(keys(index)...))
@@ -243,7 +239,7 @@ module qgplsim
             # println(ΔdJ)
 			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
             # println(gammai)
-            gamma += gammai 
+            gamma = gamma + gammai 
 			# gamma = [0.5, 1.0]
 
 			# estimation for β
@@ -272,9 +268,11 @@ module qgplsim
 			# beta[1] = -beta[1]
 			# w = ΔJ ./ (ΔZ * beta) / (v1 - v0)
 			# beta = mean(w) .* beta
-			beta += inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
+			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
+			beta = beta + betai
 		end
-		gamma/ncateg, beta/ncateg, (c1 - c0) * (v1 - v0)
+		squ = (v1 - v0) * (c1 - c0)
+		gamma/ncateg, beta/ncateg , squ
 	end
 
 	function G(v, Z, y, tau = 0.5, hp = -0.17)

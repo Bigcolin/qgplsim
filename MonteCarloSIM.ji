@@ -2,7 +2,7 @@ include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
 using DataFrames, CSV
-# using ProgressBars
+using ProgressBars
 
 function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     # fx = 1 # y = f(x), fx for different f(x)     
@@ -19,7 +19,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
-    for j in 1:rep
+    for j in (1:rep)
         X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
         model_ij = qgplsim.model(X, Z, y, τ)
 
