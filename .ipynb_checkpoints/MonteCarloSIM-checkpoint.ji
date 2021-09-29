@@ -1,8 +1,16 @@
 include("DGP.ji")
 include("qgplsim.ji")
 import Base.Threads.@threads
-using DataFrames, CSV
+using DataFrames, CSV, MAT
 using ProgressBars
+
+function mean2d(x)
+    return mean(x, dims = 1)
+end
+
+function med2d(x)
+    return median(x, dims = 1)
+end
 
 function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     # fx = 1 # y = f(x), fx for different f(x)     
@@ -19,12 +27,16 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
-    for j in (1:rep)
-        X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
-        model_ij = qgplsim.model(X, Z, y, τ)
-
-        Alpha0[j, :], Gamma0[j, :],
-        Theta0[j, :], Beta0[j, :], Squ0[j] = qgplsim.estimator(model_ij, alpha_type)
+    nt = 4 # Threads.nthreads()
+    rep_t = Int(rep/nt)
+    for i in 1:nt
+        for j in (1:rep_t)
+            X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
+            model_ij = qgplsim.model(X, Z, y, τ)
+            ind = rep_t * (i - 1) + j
+            Alpha0[ind, :], Gamma0[ind, :],
+            Theta0[ind, :], Beta0[ind, :], Squ0[ind] = qgplsim.estimator(model_ij, alpha_type)
+        end
     end
 
     Alpha0, Gamma0, Theta0, Beta0, Squ0
@@ -32,8 +44,8 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [1.0, 2.0] # single index for x
-	θ = [2.0, -1.0]  # linear for x, <α, θ> = 0 for identification
+	α = [1.0, -3.0] # single index for x
+	θ = [3.0, 1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
@@ -48,9 +60,12 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		@threads for γ in [[0.001, 0.001], [0.5, 0.001], [0.5, 0.5], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
+		@threads for γ in [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
 		
-            Alpha, Gamma, Theta, Beta, = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
+            g1, g2 = γ[1], γ[2]
+            Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
+            matwrite("./simulations/records/$n f$fx d$dist $g1 $g2.mat", 
+                     Dict("Alpha" => Alpha, "Theta" => Theta, "Gamma" => Gamma, "Beta" => Beta))
             alpha = mean(Alpha, dims = 1)
             beta = mean(Beta, dims = 1)
             gamma = mean(Gamma, dims = 1)
@@ -73,7 +88,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		CSV.write("$n f$fx d$dist.csv", df)
 end
 
-function main(N = [250 300 500 600],
+function main(N = [500],
               F = [1 2], D = [0 1])
 
     set = []
@@ -86,8 +101,8 @@ function main(N = [250 300 500 600],
         end
     end
     
-    @threads for s in set
-        simulation(s[1],  s[2], s[3])       
+    for s in set
+        simulation(s[1], s[2], s[3])       
     end
 
 end

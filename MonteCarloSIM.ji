@@ -12,7 +12,7 @@ function med2d(x)
     return median(x, dims = 1)
 end
 
-function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
+function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0,  rep = 200)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
@@ -20,19 +20,19 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     ifz = true # if false, Z = 0, i.e. no category varible
     alpha_type = 1
     # len_alpha = norm(α)
-    p = length(α)
+    p = length(α) - (1 - intercept)
     # t = time() 
     Theta0 = zeros(rep, p)
     Alpha0 = zeros(rep, p)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
-    nt = Threads.nthreads()
+    nt = 4 # Threads.nthreads()
     rep_t = Int(rep/nt)
-    @threads for i in 1:nt
+    for i in 1:nt
         for j in (1:rep_t)
             X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
-            model_ij = qgplsim.model(X, Z, y, τ)
+            model_ij = qgplsim.model(X, Z, y, τ, intercept)
             ind = rep_t * (i - 1) + j
             Alpha0[ind, :], Gamma0[ind, :],
             Theta0[ind, :], Beta0[ind, :], Squ0[ind] = qgplsim.estimator(model_ij, alpha_type)
@@ -44,8 +44,8 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [1.0, 2.0] # single index for x
-	θ = [2.0, -1.0]  # linear for x, <α, θ> = 0 for identification
+	α = [1.0, -3.0] # single index for x
+	θ = [3.0, 1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [1.0, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
@@ -88,7 +88,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		CSV.write("$n f$fx d$dist.csv", df)
 end
 
-function main(N = [300 600],
+function main(N = [500],
               F = [1 2], D = [0 1])
 
     set = []
@@ -101,8 +101,8 @@ function main(N = [300 600],
         end
     end
     
-    @threads for s in set
-        simulation(s[1],  s[2], s[3])       
+    for s in set
+        simulation(s[1], s[2], s[3])       
     end
 
 end

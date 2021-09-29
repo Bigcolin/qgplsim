@@ -86,7 +86,7 @@ module qgplsim
 			KerVal = zeros(nz, nz)
         
 			for i in 1:nz
-                Xzi = Xz[i, :]
+				Xzi = Xz[i, :]
 				Xi = Xz - Xzi
 				# Xi = -Xi
 				KerVal[:, i] = ker(Xi, h)
@@ -165,8 +165,8 @@ module qgplsim
 			for k in 1:ncateg
 				vk = v[categ[k][2]]
 				h = (length(vk))^(-0.17) * var(vk)
-				vmin = minimum(vk) + h*n / 1000
-				vmax = maximum(vk) - h*n / 1000
+				vmin = minimum(vk) + h*n / 500
+				vmax = maximum(vk) - h*n / 500
 				if vv0 < vmin
 					vv0 = vmin
 				end

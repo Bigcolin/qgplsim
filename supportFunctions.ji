@@ -75,7 +75,7 @@ function glquad(g, v0, v1, c0, c1, ng::Int = 5)
 	gv = g.(v) 
 
 	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
-	transpose(gv_) * weigtht 
+	transpose(gv_) * weigtht * (v1 - v0)/2 
 end
 
 function m2(a::Matrix, b::Vector)

@@ -37,10 +37,10 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
         Z = zeros(nSample, 2)
     end
     
-    c = 0
-    y1 = X*θ + Z*β + (X*α + Z*γ .+ c).^2 + 0.2ϵ
-    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .+ c)) + 0.2ϵ
-    if fy ==1
+    c0, c1 = 1,2
+    y1 = X*θ + Z*β + (X*α + Z*γ .+ c0).^2 .+ c1 + 0.2ϵ
+    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .+ c0)) .+ c1 + 0.2ϵ
+    if fy == 1
         y = y1
     else 
         y = y2
