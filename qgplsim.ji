@@ -170,13 +170,25 @@ module qgplsim
 			end
 			v0, v1 = vv0, vv1
 			nstep = 0
-            step = (v1 - v0)/20
-			while nstep < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
+			step = (v1 - v0)/20
+
+			while nstep < 5 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 				for k in 1:ncateg
 					vk = v[categ[k][2]]
 					yk = y[categ[k][2]]
-					v_ = v1 # vk[vk .> v1]
-					_v = v0 # vk[vk .< v0]
+
+					v_ = vk[vk .> v1]
+					if v_ == []
+						v_ = [v1]
+					end
+					_v = vk[vk .< v0]
+					if _v == []
+						_v = [v0]
+					end
+					
+					v_ = minimum(v_) # vk[vk .> v1]
+					_v = maximum(_v) # vk[vk .< v0]
+
 					C0[k] = Gz(_v, vk, yk, 1, τ)[1]
 					C1[k] = Gz(v_, vk, yk, 1, τ)[1]
 				end
@@ -210,7 +222,7 @@ module qgplsim
 		# if ncateg == 3 && c0 > c1
 		# end
 		# println("test")
-		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
+# 		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
 			ΔZ = transpose(hcat(keys(index)...))

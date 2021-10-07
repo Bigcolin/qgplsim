@@ -4,6 +4,14 @@ import Base.Threads.@threads
 using DataFrames, CSV, MAT
 using ProgressBars
 
+function mean2d(x)
+    return mean(x, dims = 1)
+end
+
+function med2d(x)
+    return median(x, dims = 1)
+end
+
 function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ

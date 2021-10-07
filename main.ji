@@ -1,8 +1,10 @@
 include("MonteCarloSIM.ji")
 import Base.Threads.@threads
+function mean2d(x)
+    return mean(x, dims = 1)
+end
 
-
-function main(rep = 20)
+function main(rep = 50)
     α = [1.0, 0.5] # single index for x
     θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
     γ = [0.5, 1.0] # single index for z
@@ -16,12 +18,16 @@ function main(rep = 20)
     ifz = true #if false, Z = 0, i.e. no category varible
     dist = 1 # Cauchy or Gauss
     τ = 0.5
+    Alpha = zeros(rep, 2)
+    Gamma = zeros(rep, 2)
+    Theta = zeros(rep, 2)
+    Beta = zeros(rep, 2)
 
     for k in (1:rep)
         Xk, Zk, yk = dgp(n, γ, θ, α, β, fx, dist, ifz)
         modelk = qgplsim.model(Xk, Zk, yk, τ)
-        alpha, gamma, theta, beta, squ = qgplsim.estimator(modelk)
-        println(gamma, "\n", beta, "\n", squ)
+        alpha, gamma, theta, beta, = qgplsim.estimator(modelk)
+        println(mean2d(gamma), "\n", mean2d(beta), "\n")
     end
 end
 #     main()
