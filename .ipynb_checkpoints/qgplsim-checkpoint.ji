@@ -21,10 +21,15 @@ module qgplsim
 		# alpha::Vector{Float64}
 		# theta::Vector{Float64}
 		quantileNum::Float64
+        intercept::Int
 
-		function model(X, Z, y, τ = 0.5)
+		function model(X, Z, y, τ = 0.5, intercept = 0)
+            n, p = size(X)
+            if intercept == 1
+                X = [ones(n, 1) X]
+            end
 			categ, index, = collection(Z)
-			new(X, Z, y, categ, index, τ)
+			new(X, Z, y, categ, index, τ, intercept)
 		end
 
 
@@ -79,9 +84,10 @@ module qgplsim
 				h = h * ht[i] / 7
 			end
 			KerVal = zeros(nz, nz)
-			# println("width in alpha :", h)
+        
 			for i in 1:nz
-				Xi = Xz - Xz[i, :]
+                Xzi = Xz[i, :]
+				Xi = Xz - Xzi
 				# Xi = -Xi
 				KerVal[:, i] = ker(Xi, h)
 
@@ -90,13 +96,14 @@ module qgplsim
 			# for further consideration and improvement.
 
 				modeli = localLinear_quantReg.npqr_model(yz, Xi)
-				wi = localLinear_quantReg.fit(modeli, KerVal, τ)
+				wi = localLinear_quantReg.fit(modeli, KerVal[:, i], τ)
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
 
 			end
+#             println(KerVal[1:4, 1:4], "\n")
 		end
-
+#         println(Bz)
 		nij = Int(n * (n - 1) / 2)
 		bz = zeros(nij, p)
 		ij = 1
@@ -170,13 +177,25 @@ module qgplsim
 			end
 			v0, v1 = vv0, vv1
 			nstep = 0
-            step = (v1 - v0)/20
-			while nstep < 20 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
+			step = (v1 - v0)/20
+
+			while nstep < 5 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 				for k in 1:ncateg
 					vk = v[categ[k][2]]
 					yk = y[categ[k][2]]
-					v_ = v1 # vk[vk .> v1]
-					_v = v0 # vk[vk .< v0]
+
+					v_ = vk[vk .> v1]
+					if v_ == []
+						v_ = [v1]
+					end
+					_v = vk[vk .< v0]
+					if _v == []
+						_v = [v0]
+					end
+					
+					v_ = minimum(v_) # vk[vk .> v1]
+					_v = maximum(_v) # vk[vk .< v0]
+
 					C0[k] = Gz(_v, vk, yk, 1, τ)[1]
 					C1[k] = Gz(v_, vk, yk, 1, τ)[1]
 				end
@@ -210,7 +229,7 @@ module qgplsim
 		# if ncateg == 3 && c0 > c1
 		# end
 		# println("test")
-		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
+# 		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
 			ΔZ = transpose(hcat(keys(index)...))
@@ -238,9 +257,9 @@ module qgplsim
 			end
             # println(ΔdJ)
 			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
-            # println(gammai)
+#             println(gammai)
+# 			gammai = [0.22, 0.44]
             gamma = gamma + gammai 
-			# gamma = [0.5, 1.0]
 
 			# estimation for β
 			z1 = categ[1][1]
@@ -249,7 +268,7 @@ module qgplsim
 			vz = v[categ[1][2]]
 			yz = y[categ[1][2]]
 			g1(u) = Gz(u, vz, yz, 0, τ)[1]
-			d1 =  sum(z1 .* gamma)
+			d1 =  sum(z1 .* gammai)
 			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
 
 			for k in 1:ncateg - 1
@@ -257,7 +276,7 @@ module qgplsim
 				vk = v[categ[k + 1][2]]
 				yk = y[categ[k + 1][2]]
 				gk(u) = Gz(u, vk , yk, 0, τ)[1]
-				dk = sum(zk .* gamma)
+				dk = sum(zk .* gammai)
 				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
 
 			end
@@ -298,19 +317,15 @@ module qgplsim
 
 			for i in 1:nz
 				KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
-			end
-
-			for i in 1:nz
-
 				tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- vz[i]) * w[2], tau) .* KerVal[:, i])
 				res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2))
 				wi = res.minimizer
+            
 				dgz[i] = wi[2]
 				DGz[indz[i]] = wi[2]
 
 				gz[i] = wi[1]
 				Gz[indz[i]] = wi[1]
-
 			end
 		end
 		Gz, DGz
@@ -333,10 +348,9 @@ module qgplsim
 
 			for i in 1:nv
 				KerVal[:, i] = ker.((vz .- v[i]) / h)/h
-			end
+# 			end
 
-			for i in 1:nv
-
+# 			for i in 1:nv
 				tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- v[i]) * w[2], tau) .* KerVal[:, i])
 				res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2))
 				wi = res.minimizer

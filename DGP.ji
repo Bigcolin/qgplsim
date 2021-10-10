@@ -1,4 +1,4 @@
-using Distributions
+using Distributions, Statistics
 
 function discret_var(n)
     a = rand(n)
@@ -36,13 +36,15 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     else
         Z = zeros(nSample, 2)
     end
-
-    y1 = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
-    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
+    
+    c = -2
+    y1 = X*θ + Z*β + (X*α + Z*γ .+ c).^2 + 0.2ϵ
+    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .+ c)) + 0.2ϵ
     if fy ==1
         y = y1
     else 
         y = y2
     end
+    y = y .- mean(y)
     X, Z, y
 end

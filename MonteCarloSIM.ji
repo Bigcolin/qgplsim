@@ -27,12 +27,16 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, rep = 200)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
-    for j in (1:rep)
-        X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
-        model_ij = qgplsim.model(X, Z, y, τ)
-
-        Alpha0[j, :], Gamma0[j, :],
-        Theta0[j, :], Beta0[j, :], Squ0[j] = qgplsim.estimator(model_ij, alpha_type)
+    nt = Threads.nthreads()
+    rep_t = Int(rep/nt)
+    @threads for i in 1:nt
+        for j in (1:rep_t)
+            X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
+            model_ij = qgplsim.model(X, Z, y, τ)
+            ind = rep_t * (i - 1) + j
+            Alpha0[ind, :], Gamma0[ind, :],
+            Theta0[ind, :], Beta0[ind, :], Squ0[ind] = qgplsim.estimator(model_ij, alpha_type)
+        end
     end
 
     Alpha0, Gamma0, Theta0, Beta0, Squ0
