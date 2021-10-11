@@ -165,8 +165,8 @@ module qgplsim
 			for k in 1:ncateg
 				vk = v[categ[k][2]]
 				h = (length(vk))^(-0.17) * var(vk)
-				vmin = minimum(vk) + h
-				vmax = maximum(vk) - h
+				vmin = minimum(vk) + h*n / 1000
+				vmax = maximum(vk) - h*n / 1000
 				if vv0 < vmin
 					vv0 = vmin
 				end
