@@ -23,7 +23,7 @@ module qgplsim
 		quantileNum::Float64
         	intercept::Int
 
-		function model(X, Z, y, τ = 0.5, intercept = 1)
+		function model(X, Z, y, τ = 0.5, intercept = 0)
 			categ, index, = collection(Z)
 			new(X, Z, y, categ, index, τ, intercept)
 		end
@@ -35,8 +35,8 @@ module qgplsim
 		alpha_,  theta_ = x_estimator(data)
 		
 		if alpha_type == 0
-			alpha = [1.0, 0.5]	
-			theta = [1.0  -2.0]
+			alpha = [-1.0, 1.0, 2.0]	
+			theta = [2.0 -1.0]
 		elseif alpha_type == 1
 			alpha = alpha_
 			theta = theta_
@@ -92,7 +92,7 @@ module qgplsim
 			# for further consideration and improvement.
 
 				modeli = localLinear_quantReg.npqr_model(yz, Xi)
-				wi = localLinear_quantReg.fit(modeli, KerVal[:, i], τ)
+				wi = localLinear_quantReg.fit(modeli, KerVal[:, i], τ, 1e-5)
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
 
@@ -111,24 +111,32 @@ module qgplsim
 		end
 		Rbz = kmeans(bz |> transpose, 2)
 		# println(Rbz.centers)
-		ind1 = Rbz.assignments .== 1
-		ind2 = Rbz.assignments .== 2
-		bz1 = bz[ind1, :]
-		bz2 = bz[ind2, :]
-		n1 = sum(ind1)
-		n2 = nij - n1
-		bz1 = sum(bz1, dims = 1)
-		bz2 = sum(bz2, dims = 1)
-		if bz1[2] > 0
+        bz1 = Rbz.centers[:, 1]
+        bz2 = Rbz.centers[:, 2]
+# 		ind1 = Rbz.assignments .== 1
+# 		ind2 = Rbz.assignments .== 2
+# 		bz1 = bz[ind1, :]
+# 		bz2 = bz[ind2, :]
+# 		n1 = sum(ind1)
+# 		n2 = nij - n1
+# 		bz1 = sum(bz1, dims = 1)
+# 		bz2 = sum(bz2, dims = 1)
+		if bz1[1] > 0
 			bz2 = -bz2
 		else
 			bz1 = -bz1
 		end
-		sum_Bz = transpose((bz1/n1 + bz2/n2))
+		sum_Bz = bz1 + bz2
 		alpha = sum_Bz / norm(sum_Bz) 
-
-		C = Bz * alpha ./ norm(alpha)^2
-		theta = sum(Bz - kron(C , transpose(alpha)) , dims = 1)
+        if data.intercept == 1
+            alpha_t = alpha[2:end]
+            Bz_t = Bz[:, 2:end]
+        else
+            alpha_t = alpha
+            Bz_t = Bz
+        end
+		C = Bz_t * alpha_t ./ norm(alpha_t)^2
+		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta / n
 		# alpha_global = alpha_global ./ alpha_global[1]
 		alpha, theta # Cz
@@ -150,7 +158,7 @@ module qgplsim
 		gamma, beta = zeros(q), zeros(q)
 		vmax = maximum(v)
 		vmin = minimum(v)
-		y = data.y  - X * transpose(theta)
+		y = data.y  - data.X * transpose(theta) # c1 = 0
 		τ = data.quantileNum
 		index = deepcopy(data.index)
 		categ = collect(index)

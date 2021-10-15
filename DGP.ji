@@ -22,7 +22,8 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     if d == 0
         ϵ = randn(nSample)
     else
-        ϵ = rand(Cauchy(), nSample)
+        # ϵ = rand(Cauchy(), nSample)
+        ϵ = rand(StudentizedRange(2, 4), nSample)
     end
     d = length(α)
     # X = (rand(nSample, d) .- 0.5) * 2

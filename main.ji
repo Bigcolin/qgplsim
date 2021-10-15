@@ -16,7 +16,7 @@ function main(rep = 50)
                     # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                     # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
     ifz = true #if false, Z = 0, i.e. no category varible
-    dist = 1 # Cauchy or Gauss
+    dist = 1 # t or Gauss
     τ = 0.5
     Alpha = zeros(rep, 2)
     Gamma = zeros(rep, 2)

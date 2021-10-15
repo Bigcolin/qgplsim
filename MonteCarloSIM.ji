@@ -27,7 +27,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
-    nt = 4 # Threads.nthreads()
+    nt =  Threads.nthreads()
     rep_t = Int(rep/nt)
     for i in 1:nt
         for j in (1:rep_t)
@@ -44,10 +44,10 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [1.0, -3.0] # single index for x
-	θ = [3.0, 1.0]  # linear for x, <α, θ> = 0 for identification
+	α = [1.0, -2.0] # single index for x
+	θ = [2.0, 1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
-	β = [1.0, -0.5] # linear for z
+	β = [0.5, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
     
