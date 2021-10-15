@@ -1,4 +1,4 @@
-using Distributions, Statistics
+using Distributions, Statistics, DelimitedFiles
 
 function discret_var(n)
     a = rand(n)
@@ -22,11 +22,12 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     if d == 0
         ϵ = randn(nSample)
     else
-        ϵ = rand(Cauchy(), nSample)
+        ϵt = readdlm("studentized.txt", ',', Float64)
+        ϵ = rand(ϵt, nSample)
     end
     d = length(α)
     # X = (rand(nSample, d) .- 0.5) * 2
-    X = randn(nSample, d)
+    X = randn(nSample, d - 1)
     minx = minimum(X, dims = 1)
     maxx = maximum(X, dims = 1)
     X = X - repeat(minx, nSample, 1) 
@@ -37,14 +38,14 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
         Z = zeros(nSample, 2)
     end
     
-    c0, c1 = 1,2
-    y1 = X*θ + Z*β + (X*α + Z*γ .+ c0).^2 .+ c1 + 0.2ϵ
-    y2 = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .+ c0)) .+ c1 + 0.2ϵ
+    c0, c1 = α[1], θ[1]
+    y1 = X*θ[2:end] + Z*β + (X*α[2:end] + Z*γ .+ c0).^2 .+ c1 + 0.2ϵ
+    y2 = X*θ[2:end] + Z*β + log.(1 .+ exp.(X*α[2:end] + Z*γ .+ c0)) .+ c1 + 0.2ϵ
     if fy == 1
         y = y1
     else 
         y = y2
     end
-    y = y .- mean(y)
+    # y = y .- mean(y)
     X, Z, y
 end

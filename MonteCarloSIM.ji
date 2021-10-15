@@ -22,14 +22,14 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0
     # len_alpha = norm(α)
     p = length(α) - (1 - intercept)
     # t = time() 
-    Theta0 = zeros(rep, p)
+    Theta0 = zeros(rep, 2)
     Alpha0 = zeros(rep, p)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
     Squ0 = zeros(rep)
     nt =  Threads.nthreads()
     rep_t = Int(rep/nt)
-    for i in 1:nt
+    @threads for i in 1:nt
         for j in (1:rep_t)
             X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
             model_ij = qgplsim.model(X, Z, y, τ, intercept)
