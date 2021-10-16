@@ -29,7 +29,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0
     Squ0 = zeros(rep)
     nt =  Threads.nthreads()
     rep_t = Int(rep/nt)
-    @threads for i in 1:nt
+    for i in 1:nt
         for j in (1:rep_t)
             X, Z, y = dgp(n, γ, θ, α, β, fx, dist, ifz)
             model_ij = qgplsim.model(X, Z, y, τ, intercept)
@@ -38,14 +38,13 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, intercept = 0
             Theta0[ind, :], Beta0[ind, :], Squ0[ind] = qgplsim.estimator(model_ij, alpha_type)
         end
     end
-
     Alpha0, Gamma0, Theta0, Beta0, Squ0
 
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [1.0, -2.0] # single index for x
-	θ = [2.0, 1.0]  # linear for x, <α, θ> = 0 for identification
+	α = [-1.0, 1.0, -0.5] # single index for x
+	θ = [0.0, 1.0, 2.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [0.5, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
@@ -60,7 +59,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
 
-		@threads for γ in [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
+		for γ in [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
 		
             g1, g2 = γ[1], γ[2]
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
@@ -101,7 +100,7 @@ function main(N = [500],
         end
     end
     
-    for s in set
+    @threads for s in set
         simulation(s[1], s[2], s[3])       
     end
 
