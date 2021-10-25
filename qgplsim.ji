@@ -35,13 +35,14 @@ module qgplsim
 		alpha_,  theta_ = x_estimator(data)
 		
 		if alpha_type == 0
-			alpha = [-1.0, 1.0, 2.0]	
-			theta = [2.0 -1.0]
+			alpha = [-1.0, 1.0, 0.5]	
+			theta = [1.0 -2.0]
 		elseif alpha_type == 1
 			alpha = alpha_
 			theta = theta_
 
 		end
+		# alpha = alpha ./ alpha[1]
 		if sum(abs.(data.Z)) < 1  # no Z 
 			gamma, beta = 0, 0
 		else
@@ -70,12 +71,16 @@ module qgplsim
 			Xz = X[indz, :]
 			xzmin = minimum(Xz, dims=1)
 			xzmax = maximum(Xz, dims=1)
-			ht = xzmax - xzmin
+			ht = var(Xz, dims = 1)
+			# ht = xzmax - xzmin
+			# ht = ones(p)
 			# println(ht)
 			# hh = 1
-			h = 2 * ones(p) .* nz^(-1 / (p + 4))
+			h = 2 * ones(p) .* nz^(-1 / (p + 6))
+			# println(h)
+
 			for i in 1:p
-				h = h * ht[i] / 7
+				h = h * ht[i] 
 			end
 			KerVal = zeros(nz, nz)
         
@@ -111,16 +116,16 @@ module qgplsim
 		end
 		Rbz = kmeans(bz |> transpose, 2)
 		# println(Rbz.centers)
-        bz1 = Rbz.centers[:, 1]
-        bz2 = Rbz.centers[:, 2]
-# 		ind1 = Rbz.assignments .== 1
-# 		ind2 = Rbz.assignments .== 2
-# 		bz1 = bz[ind1, :]
-# 		bz2 = bz[ind2, :]
-# 		n1 = sum(ind1)
-# 		n2 = nij - n1
-# 		bz1 = sum(bz1, dims = 1)
-# 		bz2 = sum(bz2, dims = 1)
+       		bz1 = Rbz.centers[:, 1]
+        	bz2 = Rbz.centers[:, 2]
+		# 		ind1 = Rbz.assignments .== 1
+		# 		ind2 = Rbz.assignments .== 2
+		# 		bz1 = bz[ind1, :]
+		# 		bz2 = bz[ind2, :]
+		# 		n1 = sum(ind1)
+		# 		n2 = nij - n1
+		# 		bz1 = sum(bz1, dims = 1)
+		# 		bz2 = sum(bz2, dims = 1)
 		if bz1[1] > 0
 			bz2 = -bz2
 		else
@@ -128,13 +133,13 @@ module qgplsim
 		end
 		sum_Bz = bz1 + bz2
 		alpha = sum_Bz / norm(sum_Bz) 
-        if data.intercept == 1
-            alpha_t = alpha[2:end]
-            Bz_t = Bz[:, 2:end]
-        else
-            alpha_t = alpha
-            Bz_t = Bz
-        end
+		if data.intercept == 1
+			alpha_t = alpha[2:end]
+			Bz_t = Bz[:, 2:end]
+		else
+			alpha_t = alpha
+			Bz_t = Bz
+		end
 		C = Bz_t * alpha_t ./ norm(alpha_t)^2
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta / n
@@ -173,9 +178,12 @@ module qgplsim
 			C1 = zeros(ncateg)
 			for k in 1:ncateg
 				vk = v[categ[k][2]]
-				h = (length(vk))^(-0.17) * var(vk)
-				vmin = minimum(vk) + h*n / 500
-				vmax = maximum(vk) - h*n / 500
+				min_vk = minimum(vk)
+				max_vk = maximum(vk)
+				h = (length(vk))^(-0.17) * var(vk) # * (max_vk - min_vk)/2
+				tail = h # (max_vk - min_vk)/10
+				vmin = min_vk + tail
+				vmax = max_vk - tail
 				if vv0 < vmin
 					vv0 = vmin
 				end
@@ -186,7 +194,7 @@ module qgplsim
 			end
 			v0, v1 = vv0, vv1
 			nstep = 0
-			step = (v1 - v0)/20
+			step = (v1 - v0)/40
 
 			while nstep < 5 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
 				for k in 1:ncateg
@@ -238,7 +246,7 @@ module qgplsim
 		# if ncateg == 3 && c0 > c1
 		# end
 		# println("test")
-# 		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
+		# 		println("c1 and c0: ", c1 ," ", c0, " ", "v1 - v0: ", v1 - v0)
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
 			ΔZ = transpose(hcat(keys(index)...))
@@ -265,10 +273,9 @@ module qgplsim
 				ΔdJ[k] = ΔdJ[k] + glquad(dgk, v0, v1, c0, c1)
 			end
             # println(ΔdJ)
-			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔdJ /(c1 - c0)
-#             println(gammai)
-# 			gammai = [0.22, 0.44]
-            gamma = gamma + gammai 
+			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ ./(c1 - c0)
+            		# println(i, ": ", gammai)
+      			gamma = gamma + gammai 
 
 			# estimation for β
 			z1 = categ[1][1]
@@ -342,7 +349,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.14)
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
@@ -361,7 +368,7 @@ module qgplsim
 
 # 			for i in 1:nv
 				tar_alpha(w) = sum(ρ.(yz .- w[1] - (vz .- v[i]) * w[2], tau) .* KerVal[:, i])
-				res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2))
+				res = localLinear_quantReg.optimfunc(tar_alpha, zeros(2), 1e-6)
 				wi = res.minimizer
 				DGz[i] = wi[2]
 				Gz[i] = wi[1]
