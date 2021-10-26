@@ -21,11 +21,12 @@ module qgplsim
 		# alpha::Vector{Float64}
 		# theta::Vector{Float64}
 		quantileNum::Float64
-        	intercept::Int
+        widthExp::Float64
+        intercept::Int
 
-		function model(X, Z, y, τ = 0.5, intercept = 0)
+		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
 			categ, index, = collection(Z)
-			new(X, Z, y, categ, index, τ, intercept)
+			new(X, Z, y, categ, index, τ, widthExp, intercept)
 		end
 
 
@@ -46,10 +47,10 @@ module qgplsim
 		if sum(abs.(data.Z)) < 1  # no Z 
 			gamma, beta = 0, 0
 		else
-			gamma, beta, squ = z_estimator(data, alpha, theta)
+			gamma, beta = z_estimator(data, alpha, theta)
 		end
 		
-		return alpha, gamma, theta, beta, squ
+		return alpha, gamma, theta, beta
 	end
 
 	function x_estimator(data::model)
@@ -165,6 +166,7 @@ module qgplsim
 		vmin = minimum(v)
 		y = data.y  - data.X * transpose(theta) # c1 = 0
 		τ = data.quantileNum
+        hp = data.widthExp
 		index = deepcopy(data.index)
 		categ = collect(index)
 		ncateg = index.count
@@ -262,7 +264,7 @@ module qgplsim
 			# ord_gl = 5
 			vz = v[categ[1][2]]
 			yz = y[categ[1][2]]
-			dg1(u) = Gz(u, vz, yz, 1, τ)[1]
+			dg1(u) = Gz(u, vz, yz, 1, τ, hp)[1]
 
 			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
 			for k in 1:ncateg - 1
@@ -306,8 +308,8 @@ module qgplsim
 			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
 			beta = beta + betai
 		end
-		squ = (v1 - v0) * (c1 - c0)
-		gamma/ncateg, beta/ncateg , squ
+# 		squ = (v1 - v0) * (c1 - c0)
+		gamma/ncateg, beta/ncateg
 	end
 
 	function G(v, Z, y, tau = 0.5, hp = -0.17)
@@ -349,7 +351,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.14)
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
