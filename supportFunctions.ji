@@ -46,7 +46,7 @@ function collection(c)
     categ_c, dict_c, categ_c[most_c]
 end
 
-function glquad(g, v0, v1, c0, c1, ng::Int = 21)
+function glquad(g, v0, v1, c0, c1, ng::Int = 11)
 	
 	if ng == 11
 
