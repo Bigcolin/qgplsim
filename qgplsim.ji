@@ -39,7 +39,7 @@ module qgplsim
 			alpha = [-1.0, 1.0, 0.5]	
 			theta = [1.0 -2.0]
 		elseif alpha_type == 1
-			alpha = alpha_ ./ alpha_[1]
+			alpha = alpha_ # s./ alpha_[1]
 			theta = theta_
 
 		end

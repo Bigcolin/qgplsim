@@ -42,8 +42,9 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, widthExp = -0
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [-1.0, 1.0, -0.5] # single index for x
-	θ = [0.0, 1.0, 2.0]  # linear for x, <α, θ> = 0 for identification
+	α = [1.0, 1.0, -2.0] # single index for x
+    # α
+	θ = [0.0, 2.0, 1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [0.5, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
@@ -57,8 +58,8 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 		var_θ1 = Float64[], var_θ2 = Float64[], 
 		β1 = Float64[], β2 = Float64[],
 		var_β1 = Float64[], var_β2 = Float64[])
-
-		@threads for γ in [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]]
+        Γ = [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5]] 
+		@threads for γ in Γ
 		
             g1, g2 = γ[1], γ[2]
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
@@ -87,7 +88,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 end
 
 function main(N = [500],
-              F = [1 2], D = [0 1])
+              F = [1 2], D = [0])
 
     set = []
      for n in N
