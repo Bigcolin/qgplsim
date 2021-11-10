@@ -14,10 +14,10 @@ module qgplsim
 
 	struct model
 		X::Matrix{Float64}
-		Z::Matrix{Float64}
+		Z
 		y::Vector{Float64}
-		categ::Vector{Vector{Float64}} # cannot ensure z is Int 
-		index::Dict{Vector{Float64}, Vector{Int}}
+		categ::Vector # cannot ensure z is Int 
+		index::Dict
 		# alpha::Vector{Float64}
 		# theta::Vector{Float64}
 		quantileNum::Float64
@@ -25,7 +25,7 @@ module qgplsim
         intercept::Int
 
 		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
-			categ, index, = collection(Z)
+			categ, index = collection(Z)
 			new(X, Z, y, categ, index, τ, widthExp, intercept)
 		end
 
@@ -153,7 +153,12 @@ module qgplsim
 		# alpha = alpha ./ alpha[1]
 		# alpha = [1.0, 2.0] 
 		# theta = [2.0 -1.0]
-		n, q = size(data.Z)
+        if typeof(data.Z) <: Vector
+            n = length(data.Z)
+            q = 1
+        else
+            n, q = size(data.Z)
+        end
 		n, p = size(data.X)
 		if data.intercept == 1
 			X = [ones(n, 1) data.X]

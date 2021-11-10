@@ -30,7 +30,23 @@ end
 
 ρ(x, α = 0.5) = abs(x) + (2α - 1)x
 
-function collection(c)
+function collection(c::Vector)
+    n  = length(c)
+    categ_c = []
+    dict_c = Dict()
+    for i in 1:n
+        if c[i] in categ_c
+            push!(dict_c[c[i]], i)
+        else
+            push!(categ_c, c[i])
+            dict_c[c[i]] = [i]
+        end
+    end
+    # most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c  # , categ_c[most_c]
+end
+
+function collection(c::Matrix)
     n,  = size(c)
     categ_c = []
     dict_c = Dict()
@@ -42,8 +58,8 @@ function collection(c)
             dict_c[c[i, :]] = [i]
         end
     end
-    most_c = argmax(length.(dict_c[z] for z in categ_c))
-    categ_c, dict_c, categ_c[most_c]
+    # most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c # , categ_c[most_c]
 end
 
 function glquad(g, v0, v1, c0, c1, ng::Int = 11)
@@ -74,7 +90,7 @@ function glquad(g, v0, v1, c0, c1, ng::Int = 11)
 	gv = g.(v) 
 
 	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
-	transpose(gv_) * weigtht * (v1 - v0)/2 
+	transpose(gv_) * weigtht * (v1 - v0)
 end
 
 function m2(a::Matrix, b::Vector)

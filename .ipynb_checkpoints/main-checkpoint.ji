@@ -1,0 +1,36 @@
+include("MonteCarloSIM.ji")
+import Base.Threads.@threads
+function mean2d(x)
+    return mean(x, dims = 1)
+end
+
+function main(rep = 50)
+    α = [1.0, 0.5] # single index for x
+    θ = [1.0, -2.0]  # linear for x, <α, θ> = 0 for identification
+    γ = [0.5, 1.0] # single index for z
+    β = [-1.0, -0.5] # linear for z
+    # Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
+
+    n = 200
+    fx = 2 # y = f(x), fx for different f(x)     
+                    # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
+                    # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
+    ifz = true #if false, Z = 0, i.e. no category varible
+    dist = 1 # t or Gauss
+    τ = 0.5
+    Alpha = zeros(rep, 2)
+    Gamma = zeros(rep, 2)
+    Theta = zeros(rep, 2)
+    Beta = zeros(rep, 2)
+
+    for k in (1:rep)
+        Xk, Zk, yk = dgp(n, γ, θ, α, β, fx, dist, ifz)
+        modelk = qgplsim.model(Xk, Zk, yk, τ)
+        alpha, gamma, theta, beta, = qgplsim.estimator(modelk)
+        println(mean2d(gamma), "\n", mean2d(beta), "\n")
+    end
+end
+#     main()
+# end
+
+# alpha, gamma, theta, beta =  MonteCarlo(n, γ, θ, α, β, τ, fx, dist, rep)
