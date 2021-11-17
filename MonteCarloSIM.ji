@@ -22,7 +22,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, widthExp = -0
     # len_alpha = norm(α)
     p = length(α) - (1 - intercept)
     # t = time() 
-    Theta0 = zeros(rep, 2)
+    Theta0 = zeros(rep, p)
     Alpha0 = zeros(rep, p)
     Gamma0 = zeros(rep, 2)
     Beta0 = zeros(rep, 2)
@@ -42,9 +42,9 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, widthExp = -0
 end
 
 function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
-	α = [-1.0, 1.0, -2.0] # single index for x
+	α = [-1.0, 1.0, -0.5, 4.0, 2.0] # single index for x
     # lenα = norm(α)
-	θ = [0.0, 2.0, 1.0]  # linear for x, <α, θ> = 0 for identification
+	θ = [0.0, 1.0, 2.0, 0.5, -1.0]  # linear for x, <α, θ> = 0 for identification
 	# γ = [1.0, 0.5] # single index for z
 	β = [0.5, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
@@ -54,17 +54,9 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
     sf = "f$fx"
     sd = "d$dist"
     fname0 = string(dir, sn, sf, sd) 
-	df = DataFrame(α1 = Float64[], α2 = Float64[],
-		var_α1 = Float64[], var_α2 = Float64[],    
-		γ1 = Float64[], γ2 = Float64[],
-		var_γ1 = Float64[], var_γ2 = Float64[],
-		θ1 = Float64[], θ2 = Float64[],
-		var_θ1 = Float64[], var_θ2 = Float64[], 
-		β1 = Float64[], β2 = Float64[],
-		var_β1 = Float64[], var_β2 = Float64[])
         Γ = [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5], [0.5, 0.5]] 
         ngamma = 5
-		for k in 1:ngamma
+		for k in tqdm(1:ngamma)
             γ = Γ[k]
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
             res = [Alpha Gamma Theta Beta]
