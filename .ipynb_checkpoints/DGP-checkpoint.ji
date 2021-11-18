@@ -1,6 +1,6 @@
 using Distributions, Statistics, DelimitedFiles
 
-function discret_var(n)
+function discret_var(n, d = 2)
     a = rand(n)
     z1 = (a .> 0.5)
     
@@ -8,8 +8,20 @@ function discret_var(n)
     z2 = b .> 0.75
     z2 += b .> 0.25
     # z2 = z2 
-    z = [z1 z2]
+    z2 = [z1 z2]
 
+    c = rand(n)
+    z3 = c .> 0.9
+    z3 = [z2 z3]
+    
+    if d == 1
+        z = z1
+    elseif d == 2
+        z = z2
+    else
+        z = z3
+    end
+    
     # for k in 1:n
     #     if sum(z[k, :]) > 1
     #         z[k, :] = z[k, :]./norm(z[k, :])
@@ -26,6 +38,7 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
         ϵ = rand(ϵt, nSample)
     end
     d = length(α)
+    q = length(γ)
     # X = (rand(nSample, d) .- 0.5) * 2
     X = randn(nSample, d - 1)
     minx = minimum(X, dims = 1)
@@ -33,9 +46,9 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true)
     # X = X - repeat(minx, nSample, 1) 
     # X = X ./ (maxx - minx) * 10 .- 5
     if z
-        Z = discret_var(nSample) .* 1.5
+        Z = discret_var(nSample, q) .* 0.5
     else
-        Z = zeros(nSample, 2)
+        Z = zeros(nSample, q)
     end
     
     c0, c1 = α[1], θ[1]
