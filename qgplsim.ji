@@ -12,18 +12,20 @@ module qgplsim
 		_Xi
 	end
 
-	struct model
+	mutable struct model
 		X::Matrix{Float64}
-		Z
+		Z # ::Matrix{Float64}
 		y::Vector{Float64}
 		categ::Vector # cannot ensure z is Int 
 		index::Dict
-		# alpha::Vector{Float64}
-		# theta::Vector{Float64}
 		quantileNum::Float64
         widthExp::Float64
         intercept::Int
 
+		alpha
+		gamma
+		theta # ::Vector{Float64}
+		beta # ::Vector{Float64}
 		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
 			categ, index = collection(Z)
 			new(X, Z, y, categ, index, τ, widthExp, intercept)
@@ -32,6 +34,20 @@ module qgplsim
 
 	end
 
+	function predict(m::model, x, z, d = 0)
+		v = m.X * m.alpha + m.Z * m.gamma
+		y = m.y - m.X * m.theta
+		n,p = size(x)
+		res = zeros(n)
+		for k in 1:n
+			vz = v[m.index[z[k,:]]]
+			yz = y[m.index[z[k,:]]]
+			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+		end
+		res
+
+		
+	end
 	function estimator(data::model, alpha_type = 1)
 		alpha_,  theta_ = x_estimator(data)
 		
@@ -49,7 +65,10 @@ module qgplsim
 		else
 			gamma, beta = z_estimator(data, alpha, theta)
 		end
-		
+		data.alpha = alpha
+		data.beta = beta
+		data.gamma = gamma
+		data.theta = theta
 		return alpha, gamma, theta, beta
 	end
 
@@ -143,7 +162,7 @@ module qgplsim
 		end
 		C = Bz_t * alpha_t ./ norm(alpha_t)^2
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
-		theta = theta / n
+		theta = theta / n |> transpose
 		# alpha_global = alpha_global ./ alpha_global[1]
 		alpha, theta # Cz
 
@@ -169,7 +188,7 @@ module qgplsim
 		gamma, beta = zeros(q), zeros(q)
 		vmax = maximum(v)
 		vmin = minimum(v)
-		y = data.y  - data.X * transpose(theta) # c1 = 0
+		y = data.y  - data.X * theta # c1 = 0
 		τ = data.quantileNum
         hp = data.widthExp
 		index = deepcopy(data.index)
