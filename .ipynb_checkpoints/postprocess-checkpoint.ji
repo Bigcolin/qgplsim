@@ -1,11 +1,11 @@
-using DataFrames, CSV, MAT, DelimitedFiles
-using ProgressBars
+using DataFrames, CSV, DelimitedFiles
 
-function mse(mat, vec, n)
+function mse(mat, vec)
     vec = transpose(vec)
+    n, p = size(mat)
     mat_vec = mat - repeat(vec, n, 1)
-    mse = sum(mat_vec.^2, dims = 2) |> sum
-    mse = mse / n
+    mse = sum(mat_vec.^2, dims = 2) # |> sum
+    # mse = mse / n
 end
 
 function read_agbt(n = 500, fx = 1, dist = 0, g = 1, dir = "./simulations/")

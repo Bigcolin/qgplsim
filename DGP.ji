@@ -39,10 +39,14 @@ df2(v) = exp(v) / ( 1 + exp(v))
 function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true, eps = 0.2)
     if d == 0
         ϵ = randn(nSample)
-    else
+    elseif d == 1
         ϵt = readdlm("studentized.txt", ',', Float64)
         ϵ = rand(ϵt, nSample)
+    else
+        d2 = Cauchy(0,1)
+        ϵ = rand(d2, nSample)
     end
+    
     d = length(α)
     q = length(γ)
     # X = (rand(nSample, d) .- 0.5) * 2

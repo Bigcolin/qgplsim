@@ -51,7 +51,7 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
 	β3 = [0.5, -0.5, -0.5] # linear for z
 	# Q(y|x, z) = Xθ + Zβ + g(Xα + Zγ)
 	# n = 400
-    dir = "./simulations/"
+    dir = "./simulations/n=$n/"
     sn = "$n"
     sf = "f$fx"
     sd = "d$dist"
@@ -59,15 +59,15 @@ function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
         Γ2 = [[0.5, 0.001], [0.5, 1.0], [0.001, 0.5], [1.0, 0.5], [0.5, 0.5]] 
         Γ3 = [[0.001, 0.001, 0.001], [0.001, 0.5, 0.5], [0.001, 0.5, 1.0], [0.5, 0.5, 0.5], [0.5, 1.0, 2.0]] 
         
-        Γ = Γ3
-        β = β3
+        Γ = Γ2
+        β = β2
         ngamma = 5
 		for k in tqdm(1:ngamma)
             γ = Γ[k]
             Alpha, Gamma, Theta, Beta = MonteCarlo(n, γ, θ, α, β, τ, fx, dist)
             res = [Alpha Gamma Theta Beta]
             fname = string(fname0, "g$k.txt")
-            open(fname, "w") do io
+            open(fname, "a") do io
                 writedlm(io, res)
             end
 		end
