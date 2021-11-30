@@ -34,28 +34,38 @@ module qgplsim
 
 	end
 
-	function predict(m::model, x, z, d = 0)
-		if length(m.gamma) > 1
-			v = m.X * m.alpha + m.Z * m.gamma
-		else
-			v = m.X * m.alpha + m.Z .* m.gamma
-		end
+	function predict(m::model, x::Matrix, z::Vector, d = 0)
+
+		v = m.X * m.alpha + m.Z .* m.gamma
 		y = m.y - m.X * m.theta
 		n,p = size(x)
 		res = zeros(n)
 		
 		for k in 1:n
-			if length(m.gamma) > 1
-				zk = z[k,:]
-			else
-				zk = z[k]
-			end
+			zk = z[k]
 			vz = v[m.index[zk]]
 			yz = y[m.index[zk]]
 			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
 		end
 		res
+		
+	end
 
+	function predict(m::model, x::Matrix, z::Matrix, d = 0)
+
+		v = x * m.alpha + z * m.gamma
+  		vm = m.X * m.alpha + m.Z * m.gamma  
+		ym = m.y - m.X * m.theta
+		n,p = size(x)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:n
+			zk = z[k,:]
+			vz = vm[m.index[zk]]
+			yz = ym[m.index[zk]]
+			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+		end
+		res
 		
 	end
 	function estimator(data::model, alpha_type = 1)
@@ -107,13 +117,13 @@ module qgplsim
 			# println(ht)
 			# hh = 1
 			h = 2 * ones(p) .* nz^(-1 / (p + 6))
-			# println(h)
 
 			for i in 1:p
-				h = h * ht[i] 
+				h = h * ((ht[i] > 0.2) * ht[i] + (ht[i] < 0.2) * 0.2) 
 			end
-			KerVal = zeros(nz, nz)
+			println(h)	
         
+            KerVal = zeros(nz, nz)     
 			for i in 1:nz
 				Xzi = Xz[i, :]
 				Xi = Xz - Xzi
@@ -130,10 +140,11 @@ module qgplsim
 				wi = localLinear_quantReg.fit(modeli, KerVal[:, i], τ, 1e-5)
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
-
+                # println(KerVal)
 			end
 		end
-        	# println(Bz)
+
+        # println(Bz)
 		nij = Int(n * (n - 1) / 2)
 		bz = zeros(nij, p + data.intercept)
 		ij = 1
