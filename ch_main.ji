@@ -1,0 +1,72 @@
+using DataFrames, CSV, CategoricalArrays
+using Statistics, Clustering, LinearAlgebra
+using Base.Threads
+
+include("supportFunctions.ji")
+include("qgplsim.ji")
+
+filename = "./datasets/housing.csv"
+chdata = DataFrame(CSV.File(filename))
+df = copy(chdata)
+dropmissing!(df)
+ndf = names(df)
+
+pos = df[!, ndf[1:2]]
+pos = Array(pos)
+km_pos = kmeans(pos |> transpose, 2)
+df[!, "pos"] = km_pos.assignments
+dfop = CategoricalArray(df[!, "ocean_proximity"])
+levels!(dfop, ["<1H OCEAN", "INLAND", "NEAR BAY", "NEAR OCEAN", "ISLAND"])
+df[!, :lv_op] = levelcode.(dfop)
+df= df[df[!, :lv_op] .!= 5, :]
+ndf = names(df)
+
+name_of_y = :median_house_value
+names_of_x = Symbol.(ndf[3:8])
+names_of_z = Symbol.(ndf[11 : end])
+dfy = df[!, name_of_y]
+dfX = df[!, names_of_x]
+dfZ = df[!, names_of_z]
+
+
+n, = size(dfy)
+ntrain = 1000
+ntest = n - ntrain
+# ntest = 1000
+X, Z, y = Array(dfX), Array(dfZ), Array(dfy)
+y = log.(y)
+function simu(indn, ntrain)
+    indr = rand(indn, ntrain)
+    indt = [x in indr for x in indn]
+    indt = Bool.(1 .- indt)
+    indt = indn[indt]
+
+    Xr = X[indr, :]
+    yr = y[indr] / 1e3  # 1000 dollors per
+    Zr = Z[indr, :]
+    Xr = scale3(Xr)
+
+    Xt = X[indt, :]
+    yt = y[indt] / 1e3  # 1000 dollors per
+    Zt = Z[indt, :]
+    Xt = scale3(Xt)
+
+    qsmodel = qgplsim.model(Xr, Zr, yr, tau)
+    qgplsim.estimator(qsmodel)
+    v1 = Xt * qsmodel.alpha
+    yp = qgplsim.predict(qsmodel, Xt, Zt)
+    # yp1 = qgplsim.predict(qsmodel1, Xt, Zt)
+    # yp9 = qgplsim.predict(qsmodel9, Xt, Zt)
+    bias = (yp - yt) #./yt
+    mbias = (((bias).^2 |> sum ) / ntest ) # |> sqrt
+end
+
+nbs = 12 # n bootstrap
+pred_bias = zeros(nbs)
+indn = Array(1:n)    
+tau = 0.5
+@threads for k in 1:nbs
+    pred_bias[k] = simu(indn, ntrain)
+end
+
+pred_bias

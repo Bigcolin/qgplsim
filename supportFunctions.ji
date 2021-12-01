@@ -62,6 +62,13 @@ function collection(c::Matrix)
     categ_c, dict_c # , categ_c[most_c]
 end
 
+function scaler(X, r)
+    ntrain, = size(X)
+    Xr = (X - repeat(minimum(X, dims = 1), ntrain, 1))./ (repeat(maximum(X, dims = 1), ntrain, 1) - repeat(minimum(X, dims = 1), ntrain, 1))
+    Xr = Xr .* 2 .- 1
+    Xr = Xr .* r
+end
+
 function glquad(g, v0, v1, c0, c1, ng::Int = 11)
 	
 	if ng == 11

@@ -1,33 +1,50 @@
 module localLinear_quantReg
-using Distributions, Optim
+using Distributions, QuantReg, GLM, DataFrames
 include("supportFunctions.ji")
 
 
-function optimfunc(f, init_value, tols = 1e-5)
-    res = optimize(f, init_value, method=BFGS(), f_tol=tols)
-    return res 
-end
+    function optimfunc(f, init_value, tols = 1e-6)
+        res = optimize(f, init_value, method=BFGS(), f_tol=tols)
+        return res 
+    end
 
-struct npqr_model
-	X::Matrix
-	y::Vector
-	n::Int
-	d::Int
+    struct npqr_model
+        df::DataFrame
+        model::QuantRegModel
 
-	function npqr_model(y, X)
-		n, d = size(X)
-		new(X, y, n, d) 
-	
-	end
-end
+        function npqr_model(y, X, w, τ = 0.5)
+            y = y .* w
+            X = X .* w
+            df = DataFrame(X)
+            nox = names(df)
+            df[:y] = y
+            formula1 = Term(:y) ~ sum([Term(x) for x in nox])	
+            model = QuantRegModel(formula1, df, τ = 0.5)
+            QuantReg.fit!(model)
+            new(df, model) 
+        end
+    end
 
-function fit(md::npqr_model, KerVal, τ = 0.5, tols = 1e-5)
-	X = md.X
-	y = md.y
-	lossfunc(w) = sum(ρ.(y .- w[1] - X * w[2:end], τ) .* KerVal)
-	res = optimize(lossfunc, zeros(md.d + 1), method = BFGS(), f_tol = tols)
-	res.minimizer
-	
-end
+    function fit(md::npqr_model, KerVal, τ = 0.5, tols = 1e-6)
+        X = md.X .* KerVal
+        y = md.y .* KerVal
+        lossfunc(w) = sum(ρ.((y .- w[1] - X * w[2:end]) .* KerVal, τ) ) # .* KerVal
+        res = optimize(lossfunc, zeros(md.d + 1), method = BFGS(), f_tol = tols)
+        res.minimizer
+
+    end
+
+    function npqr_fit(y, X, w, τ = 0.5)
+		n = length(y)
+        y = y .* w
+		X = [ones(n) X] .* w
+		df = DataFrame(X)
+		nox = names(df)
+		df[:y] = y
+		formula1 = Term(:y) ~ sum([Term(x) for x in nox])	
+		model = QuantRegModel(formula1, df, τ = 0.5)
+		QuantReg.fit!(model)
+		coef(model)
+    end
 
 end
