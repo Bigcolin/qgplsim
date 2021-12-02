@@ -62,8 +62,9 @@ function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true, eps = 0.2)
     end
     
     c0, c1 = α[1], θ[1]
-    y1 = X*θ[2:end] + Z*β + (X*α[2:end] + Z*γ .+ c0).^2 .+ c1 + eps*ϵ
-    y2 = X*θ[2:end] + Z*β + log.(1 .+ exp.(X*α[2:end] + Z*γ .+ c0)) .+ c1 + eps*ϵ
+    eps = eps .* 1 # (log.(X*α[2:end] .+ 20 ))
+    y1 = X*θ[2:end] + Z*β + (X*α[2:end] + Z*γ .+ c0).^2 .+ c1 .+ eps.*ϵ
+    y2 = X*θ[2:end] + Z*β + log.(1 .+ exp.(X*α[2:end] + Z*γ .+ c0)) .+ c1 .+ eps.*ϵ
     if fy == 1
         y = y1
     else 

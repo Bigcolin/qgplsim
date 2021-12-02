@@ -1,0 +1,44 @@
+using DataFrames, CSV, CategoricalArrays
+using Statistics, Clustering, LinearAlgebra
+using Base.Threads
+
+include("supportFunctions.ji")
+
+function califdata(stds = 3)
+    filename = "./datasets/housing.csv"
+    chdata = DataFrame(CSV.File(filename))
+    df = copy(chdata)
+    dropmissing!(df)
+    ndf = names(df)
+
+    pos = df[!, ndf[1:2]]
+    pos = Array(pos)
+    km_pos = kmeans(pos |> transpose, 2)
+    df[!, "pos"] = km_pos.assignments
+    dfop = CategoricalArray(df[!, "ocean_proximity"])
+    levels!(dfop, ["<1H OCEAN", "INLAND", "NEAR BAY", "NEAR OCEAN", "ISLAND"])
+    df[!, :lv_op] = levelcode.(dfop)
+    df= df[df[!, :lv_op] .!= 5, :]
+    ndf = names(df)
+
+    name_of_y = :median_house_value
+    names_of_x = Symbol.(ndf[1:8]) # 3:8
+    names_of_z =[:lv_op, :pos] # :pos
+    dfy = df[!, name_of_y]
+    dfX = df[!, names_of_x]
+    dfZ = df[!, names_of_z]
+
+    n, = size(dfy)
+
+    X, Z, y = Array(dfX), Array(dfZ), Array(dfy)
+    
+    mx = mean(X, dims = 1)
+    sx = std(X, dims = 1)
+    up_x = mx .+  stds * sx
+    low_x = mx .- stds * sx
+    ind = Bool.(ones(n))
+    for k in 1:n
+            ind[k] =  X[k, 4:8] < up_x[4:8] && X[k, 4:8] > low_x[4:8]
+    end
+    X, Z, y = X[ind, 3:8], Z[ind, :], y[ind]
+end
