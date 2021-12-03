@@ -21,7 +21,7 @@ module qgplsim
 		y::Vector{Float64}
 		categ::Vector # cannot ensure z is Int 
 		index::Dict
-		quantileNum::Float64
+		quantileNum
         widthExp::Float64
         intercept::Int
 
@@ -186,7 +186,8 @@ module qgplsim
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta / n |> transpose
 		# alpha_global = alpha_global ./ alpha_global[1]
-		alpha, theta # Cz
+        sg = sign(alpha[1])
+		alpha .* sg, theta .* sg # Cz
 
 	end
 
@@ -278,8 +279,8 @@ module qgplsim
                     nstep = nstep + 1
 		 		end
 		 	end
-            C1 = C1[C1 .> C0]
-            c1 = minimum(C1)
+            # C1 = C1[C1 .> C0]
+            # c1 = minimum(C1)
 
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
@@ -394,12 +395,12 @@ module qgplsim
 		nv = length(v)
 		Gz = zeros(nv)
 		DGz = zeros(nv)
-        max_v = maximum(vz)
-        min_v = minimum(vz)
-        widv =   max_v - min_v    
-        vz = ((vz .- min_v) / widv .- 0.5) * 5 
-        v = ((v .- min_v) / widv .- 0.5) * 5
-		var_v = std(vz) # var(vz)
+        # max_v = maximum(vz)
+        # min_v = minimum(vz)
+        # widv =   max_v - min_v    
+        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
+        # v = ((v .- min_v) / widv .- 0.5) * 5
+		var_v =  std(vz)
 
 		h = (nz)^(hp)  * var_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17

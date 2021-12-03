@@ -40,5 +40,5 @@ function califdata(stds = 3)
     for k in 1:n
             ind[k] =  X[k, 4:8] < up_x[4:8] && X[k, 4:8] > low_x[4:8]
     end
-    X, Z, y = X[ind, 3:8], Z[ind, :], y[ind]
+    X, Z, y = X[ind, 1:8], Z[ind, :], y[ind]
 end

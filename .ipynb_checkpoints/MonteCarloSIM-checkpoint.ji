@@ -12,7 +12,7 @@ function med2d(x)
     return median(x, dims = 1)
 end
 
-function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, widthExp = -0.17, intercept = 0,  rep = 100)
+function MonteCarlo(n, γ, θ, α, β, τ = [0.5], fx = 2, dist = 1, widthExp = -0.17, intercept = 0,  rep = 100)
     # fx = 1 # y = f(x), fx for different f(x)     
                 # fx = 1, y = X*θ + Z*β + (X*α + Z*γ .- 1).^2 + 0.2ϵ
                 # fx = 2, y = X*θ + Z*β + log.(1 .+ exp.(X*α + Z*γ .- 1)) + 0.2ϵ
@@ -42,7 +42,7 @@ function MonteCarlo(n, γ, θ, α, β, τ = 0.5, fx = 2, dist = 1, widthExp = -0
 
 end
 
-function simulation(n::Int, fx = 2, dist = 0, τ = 0.5)
+function simulation(n::Int, fx = 2, dist = 0, τ = [0.5])
 	α = [-1.0, 1.0, -0.5, 4.0, 2.0] # single index for x
     # lenα = norm(α)
 	θ = [0.0, 1.0, 2.0, 0.5, -1.0]  # linear for x, <α, θ> = 0 for identification

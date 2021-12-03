@@ -28,7 +28,17 @@ function ker(X::Matrix, h::Vector)
     v
 end
 
-ρ(x, α = 0.5) = abs(x) + (2α - 1)x
+rho(x, α::Float64) = abs(x) + (2α - 1)x
+
+function ρ(x, α::Vector{Float64})
+    res = 0
+    lena = length(α)
+    for k in 1:lena
+        res += rho(x, α[k])
+    end
+    res
+end
+
 
 function collection(c::Vector)
     n  = length(c)
@@ -60,6 +70,18 @@ function collection(c::Matrix)
     end
     # most_c = argmax(length.(dict_c[z] for z in categ_c))
     categ_c, dict_c # , categ_c[most_c]
+end
+
+function categ_binary(Z::Matrix{Int})
+    n, d = size(Z)
+    categ, index = collection(Z)
+    ncateg = length(categ)
+    res = Int.(zeros(n, ncateg - 1))
+    for k in 1:ncateg - 1
+        zk = categ[k]
+        res[index[zk], k] .= 1
+    end
+    res
 end
 
 function scaler(X, r)

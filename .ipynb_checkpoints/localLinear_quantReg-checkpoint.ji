@@ -34,13 +34,13 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function direct_optim(yi::Vector, Xi::Matrix, w::Vector, tau = 0.5)
+    function direct_optim(yi::Vector, Xi::Matrix, w::Vector, tau)
         y = yi .* w 
         n = length(y)
         X = [ones(n, 1) Xi] .* w        
         n, d = size(X)		
-
-        tarfunc(b::Vector) = sum(ρ.(y - X*b, tau))
+        r(x) = ρ(x, tau)
+        tarfunc(b::Vector) = sum(r.(y - X*b))
         res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-6)
         b0 = Optim.minimizer(res)
     end
