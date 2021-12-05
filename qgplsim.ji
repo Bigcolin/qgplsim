@@ -58,7 +58,7 @@ module qgplsim
 
 		v = x * m.alpha + z * m.gamma # * 0.83
   		vm = m.X * m.alpha + m.Z * m.gamma  # * 0.83
-		ym = m.y - m.X * m.theta
+		ym = m.y - m.X * m.theta # - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
 		# categ, index = collection(z)
@@ -212,7 +212,7 @@ module qgplsim
         max_v = maximum(v)
         min_v = minimum(v)
         widv =   max_v - min_v    
-        v = ((v .- min_v) / widv .- 0.5) * 4
+        v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
     
 		y = data.y  - data.X * theta # c1 = 0
 		τ = data.quantileNum
@@ -223,9 +223,7 @@ module qgplsim
 		vv0, vv1 = -1e5, 1e5
 		v0, v1 = -1e5, 1e5
 		c0, c1 = 1, -1
-		# _c0, _c1 = 1, -1
-		# while ncateg > 3 && c0 > c1
-
+        
 			C0 = zeros(ncateg)
 			C1 = zeros(ncateg)
 			for k in 1:ncateg
@@ -234,8 +232,8 @@ module qgplsim
 				max_vk = maximum(vk)
 				h = (length(vk))^(hp) * std(vk)    # * (max_vk - min_vk)/2
 				tail = h # (max_vk - min_vk)/10
-				vmin = min_vk + tail
-				vmax = max_vk - tail
+				vmin = min_vk + 2 * tail
+				vmax = max_vk - 2 * tail
 				if vv0 < vmin
 					vv0 = vmin
 				end
@@ -401,13 +399,20 @@ module qgplsim
         # vz = ((vz .- min_v) / widv .- 0.5) * 5 
         # v = ((v .- min_v) / widv .- 0.5) * 5
 		var_v =  std(vz)
+        mean_v = mean(vz)
 
 		h = (nz)^(hp)  * var_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17
 			KerVal = zeros(nz, nv)
 
 			for i in 1:nv
-				KerVal[:, i] = ker.((vz .- v[i]) / h)/h
+                if abs(v[i] - mean_v) > 3*var_v
+                    hi = abs(v[i] - mean_v) / var_v * h / 3
+                else
+                    hi = h
+                end
+                
+				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
                 wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau)
