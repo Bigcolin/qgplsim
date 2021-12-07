@@ -40,7 +40,7 @@ module qgplsim
 	function predict(m::model, x::Matrix, z::Vector, d = 0)
 
 		v = m.X * m.alpha + m.Z .* m.gamma
-		y = m.y - m.X * m.theta
+		y = m.y - m.X * m.theta - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
 		
@@ -66,7 +66,12 @@ module qgplsim
 			zk = z[k,:]
 			vz = vm[m.index[zk]]
 			yz = ym[m.index[zk]]
-			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+            if d < 2
+                res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+            else
+                res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp)[1]
+
+            end
             # if res[k] == 0
             #     println(k, " ", zk, " ", v[k])
             # end
@@ -122,7 +127,7 @@ module qgplsim
 			# ht = ones(p)
 			# println(ht)
 			# hh = 1
-			h = 2 * ones(p) .* nz^(-1 / (p + 6))
+			h = 7 * ones(p) .* nz^(-1 / (p + 6))
 			# println(h)
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
@@ -342,48 +347,6 @@ module qgplsim
 		gamma/ncateg, beta/ncateg
 	end
 
-	function G(v, Z, y, tau = 0.5, hp = -0.17)
-		# Estimate Q(y) = g(v + Zγ)
-		# for v, return gz = g.(v) and dgz = ∇g.(v) 
-
-		n, q = size(Z)
-		categ, index, = collection(Z)
-		ncateg = index.count
-		Gz = zeros(n)
-		DGz = zeros(n)
-    
-		max_v = maximum(v)
-        min_v = minimum(v)
-        widv =   max_v - min_v    
-        v = ((v .- min_v) / widv .- 0.5) * 4
-    
-		for k in 1:ncateg
-			z = categ[k]
-			indz = index[z]
-			nz = length(indz)
-			dgz = zeros(nz)
-			gz = zeros(nz)
-			yz = y[indz]
-			vz = v[indz]
-
-			h = (nz)^(hp) * var(vz) 
-        
-			KerVal = zeros(nz, nz)
-			for i in 1:nz
-				KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
-                wi = localLinear_quantReg.npqr_fit(yz, vz .- v[i], KerVal[:,i], tau)
-            
-				dgz[i] = wi[2]
-				DGz[indz[i]] = wi[2]
-
-				gz[i] = wi[1]
-				Gz[indz[i]] = wi[1]
-			end
-		end
-		Gz, DGz
-
-	end
-
 
 	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
@@ -401,13 +364,13 @@ module qgplsim
 		var_v =  std(vz)
         mean_v = mean(vz)
 
-		h = (nz)^(hp)  * var_v 
+		h = 1.5*(nz)^(hp)  * var_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17
-			KerVal = zeros(nz, nv)
-
+		KerVal = zeros(nz, nv)
+        nstd = 3
 			for i in 1:nv
-                if abs(v[i] - mean_v) > 3*var_v
-                    hi = abs(v[i] - mean_v) / var_v * h / 3
+                if abs(v[i] - mean_v) > nstd*var_v
+                    hi = exp(abs(v[i] - mean_v) / var_v / nstd^2) * h 
                 else
                     hi = h
                 end
@@ -415,10 +378,11 @@ module qgplsim
 				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau, d)
 
-
-				DGz[i] = wi[2]
+                if d == 1
+                    DGz[i] = wi[2]
+                end
 				Gz[i] = wi[1]
 
 			end
@@ -428,5 +392,89 @@ module qgplsim
 				return Gz
 			end
 	end
+
+
+
+	function adaptive_Gz(v, vz, yz, tau = 0.5, hp = -0.17)
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+		nz = length(vz)
+		nv = length(v)
+		Gz = zeros(nv)
+        # max_v = maximum(vz)
+        # min_v = minimum(vz)
+        # widv =   max_v - min_v    
+        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
+        # v = ((v .- min_v) / widv .- 0.5) * 5
+		var_v =  std(vz)
+        mean_v = mean(vz)
+
+		h = 1.8*(nz)^(hp) * var_v 
+        # h = (h > 0.17) * h + (h < 0.17) * 0.17
+		KerVal = zeros(nz, nv)
+        nstd = 4
+			for i in 1:nv
+                if abs(v[i] - mean_v) > nstd*var_v
+                    hi = exp(abs(v[i] - mean_v) / var_v / nstd^2) * h 
+                    d = 0
+                else
+                    hi = h
+                    d = 1
+                end
+                
+				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
+                vi = reshape(vz .- v[i], nz, 1)
+                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau, d)
+
+				Gz[i] = wi[1]
+
+			end
+
+		Gz
+	end
+
+# function G(v, Z, y, tau = 0.5, hp = -0.17)
+# 		# Estimate Q(y) = g(v + Zγ)
+# 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+# 		n, q = size(Z)
+# 		categ, index, = collection(Z)
+# 		ncateg = index.count
+# 		Gz = zeros(n)
+# 		DGz = zeros(n)
+    
+# 		max_v = maximum(v)
+#         min_v = minimum(v)
+#         widv =   max_v - min_v    
+#         v = ((v .- min_v) / widv .- 0.5) * 4
+    
+# 		for k in 1:ncateg
+# 			z = categ[k]
+# 			indz = index[z]
+# 			nz = length(indz)
+# 			dgz = zeros(nz)
+# 			gz = zeros(nz)
+# 			yz = y[indz]
+# 			vz = v[indz]
+
+# 			h = (nz)^(hp) * var(vz) 
+        
+# 			KerVal = zeros(nz, nz)
+# 			for i in 1:nz
+# 				KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
+#                 wi = localLinear_quantReg.npqr_fit(yz, vz .- v[i], KerVal[:,i], tau)
+            
+# 				dgz[i] = wi[2]
+# 				DGz[indz[i]] = wi[2]
+
+# 				gz[i] = wi[1]
+# 				Gz[indz[i]] = wi[1]
+# 			end
+# 		end
+# 		Gz, DGz
+
+# 	end
 
 end # module

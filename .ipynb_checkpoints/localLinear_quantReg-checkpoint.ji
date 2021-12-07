@@ -34,10 +34,14 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function direct_optim(yi::Vector, Xi::Matrix, w::Vector, tau)
+    function direct_optim(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1)
         y = yi .* w 
         n = length(y)
-        X = [ones(n, 1) Xi] .* w        
+        if dv == 1
+            X = [ones(n, 1) Xi] .* w 
+        else
+            X = ones(n, 1) .* w
+        end
         n, d = size(X)		
         r(x) = ρ(x, tau)
         tarfunc(b::Vector) = sum(r.(y - X*b))

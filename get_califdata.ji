@@ -2,7 +2,7 @@ using DataFrames, CSV, CategoricalArrays
 using Statistics, Clustering, LinearAlgebra
 using Base.Threads
 
-include("supportFunctions.ji")
+include("./src/supportFunctions.ji")
 
 function califdata(stds = 3)
     filename = "./datasets/housing.csv"

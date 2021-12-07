@@ -1,0 +1,34 @@
+# This is a numerical investigation of <Local polynimial modeling Ch3> 
+# in Fan. & Gijbels 1996
+# Situation 
+# 1. For univar. sample {y}n, {v}n
+#       i. a constant h via
+#       ii. a piecewise vector h via
+# 2. For multivar. sample {y}n, {X}nd
+#       i.
+#
+# Input: 
+#       sample:  y, X or v
+#       kernel function ker(x)
+
+using Statistics, LinearAlgebra, Random, Distributions
+include("localLinear_quantReg.ji")
+
+function constant_bandwidth(y::Vector, X::Matrix, ker)
+    h = var(X, dims = 1)
+
+end
+
+function  piecewise_bandwidth(y::Vector, X::Matrix, ker)
+
+    
+end
+
+function constant_bandwidth(y::Vector, v::Vector, ker)
+    h = var(X, dims = 1)
+end
+
+function  piecewise_bandwidth(y::Vector, v::Vector, ker)
+    
+    
+end
