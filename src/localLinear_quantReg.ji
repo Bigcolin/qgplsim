@@ -45,7 +45,7 @@ include("supportFunctions.ji")
         n, d = size(X)		
         r(x) = ρ(x, tau)
         tarfunc(b::Vector) = sum(r.(y - X*b))
-        res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-4)
+        res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-5)
         b0 = Optim.minimizer(res)
     end
 
