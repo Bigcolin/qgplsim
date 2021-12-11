@@ -47,6 +47,11 @@ function ρ(x, α::Vector{Float64}) # for cqr
     res
 end
 
+function rho_eps(r, a, e)
+    res = rho(r, a) + e/2 * log(e + abs(r))
+    res
+end
+
 
 function collection(c::Vector)
     n  = length(c)

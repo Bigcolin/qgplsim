@@ -49,4 +49,11 @@ include("supportFunctions.ji")
         b0 = Optim.minimizer(res)
     end
 
+    function mmqr(yi, Xi, theta0)
+        r0 = yi - Xi * theta0
+        n,d = size(Xi)
+        
+    
+    end
+
 end
