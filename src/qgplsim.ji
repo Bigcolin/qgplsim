@@ -147,8 +147,8 @@ module qgplsim
 			# the accuracy of alpha plays the mvp in qgplsim, so 
 			# we move the estimation of alpha to localLinear_quantReg.ji
 			# for further consideration and improvement.
-                # wi = localLinear_quantReg.npqr_fit(yz, Xi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.direct_optim(yz, Xi, KerVal[:,i], tau)
+                # wi = localLinear_quantReg.npqr_ft(yz, Xi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.solver(yz, Xi, KerVal[:,i], tau, 1, "mm")
 
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
@@ -377,7 +377,7 @@ module qgplsim
 				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau, d)
+                wi = localLinear_quantReg.solver(yz, vi, KerVal[:,i], tau, d)
 
                 if d == 1
                     DGz[i] = wi[2]
@@ -425,7 +425,7 @@ module qgplsim
 				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.direct_optim(yz, vi, KerVal[:,i], tau, d)
+                wi = localLinear_quantReg.solver(yz, vi, KerVal[:,i], tau, d)
 
 				Gz[i] = wi[1]
 

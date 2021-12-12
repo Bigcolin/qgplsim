@@ -1,5 +1,5 @@
 module localLinear_quantReg
-using Distributions, QuantReg, GLM, DataFrames
+using Distributions, LinearAlgebra, QuantReg, GLM, DataFrames
 using Optim
 include("supportFunctions.ji")
 
@@ -34,7 +34,7 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function direct_optim(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1)
+    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="mm")
         y = yi .* w 
         n = length(y)
         if dv == 1
@@ -42,17 +42,38 @@ include("supportFunctions.ji")
         else
             X = ones(n, 1) .* w
         end
-        n, d = size(X)		
-        r(x) = ρ(x, tau)
-        tarfunc(b::Vector) = sum(r.(y - X*b))
-        res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-5)
-        b0 = Optim.minimizer(res)
+        n, d = size(X)
+        b0 = zeros(d)
+        if method == "optim"		
+            r(x) = ρ(x, tau)
+            tarfunc(b::Vector) = sum(r.(y - X*b))
+            res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-5)
+            b0 = Optim.minimizer(res)
+        elseif  method == "mm"
+            t0 = (transpose(X) * X)*transpose(X) * y
+            b0 = mmqr(y, X, tau, t0)
+        end
+        return b0
     end
 
-    function mmqr(yi, Xi, theta0)
-        r0 = yi - Xi * theta0
-        n,d = size(Xi)
-        
+    function mmqr(yi, Xi, tau, theta0, eps = 3.7, tol = 1e-4)
+        q = tau[1]
+        thetak = theta0 .+ 100*tol
+        max_iter = 300
+        k = 0
+        while norm(thetak - theta0) > tol && k < max_iter
+
+            theta0 = thetak
+            rk = yi - Xi * theta0
+            W = Diagonal(1 ./ (eps .+ rk))
+            v = 1 .- 2q .- rk ./ (eps .+ rk)
+            Δ = -pinv(transpose(Xi) * W * Xi)*transpose(Xi) * v
+            thetak = theta0 + Δ
+            # println(thetak)
+            k += 1
+        end
+
+        thetak
     
     end
 
