@@ -47,19 +47,19 @@ include("supportFunctions.ji")
         if method == "optim"		
             r(x) = ρ(x, tau)
             tarfunc(b::Vector) = sum(r.(y - X*b))
-            res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-5)
+            res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-6)
             b0 = Optim.minimizer(res)
         elseif  method == "mm"
-            t0 = (transpose(X) * X)*transpose(X) * y
+            t0 = pinv(transpose(X) * X)*transpose(X) * y
             b0 = mmqr(y, X, tau, t0)
         end
         return b0
     end
 
-    function mmqr(yi, Xi, tau, theta0, eps = 3.7, tol = 1e-4)
+    function mmqr(yi, Xi, tau, theta0, eps = 0.99, tol = 1e-5)
         q = tau[1]
         thetak = theta0 .+ 100*tol
-        max_iter = 300
+        max_iter = 500
         k = 0
         while norm(thetak - theta0) > tol && k < max_iter
 

@@ -7,11 +7,12 @@ function epker(x)
     return 0.75 * (1 - x^2) * i
 end
 function gsker(x)
-    exp(- x^2 / 2)
+    pdf(distribution_ker, x)
+    # exp(- x^2 / 2)
 end
 
 function ker(x)
-    epker(x)
+    gsker(x)
 end
 
 function ker(x::Vector, h::Float64)

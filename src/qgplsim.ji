@@ -135,12 +135,15 @@ module qgplsim
 			end
 			# println(h)	
 
-            KerVal = zeros(nz, nz)     
-			for i in 1:nz
+			for i in 1:nz 
 				Xzi = Xz[i, :]
 				Xi = Xz - (Xzi)
+				ind = Vector(1:nz)
+				popat!(ind, i)
+				Xi = Xi[ind, :]
+				yzi = yz[ind]
 				# Xi = -Xi
-				KerVal[:, i] = ker(Xi, h)
+				KerVal = ker(Xi, h)
 				if data.intercept == 1
 					Xi = [ones(nz, 1) Xi]
 				end
@@ -148,7 +151,7 @@ module qgplsim
 			# we move the estimation of alpha to localLinear_quantReg.ji
 			# for further consideration and improvement.
                 # wi = localLinear_quantReg.npqr_ft(yz, Xi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yz, Xi, KerVal[:,i], tau, 1, "mm")
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1)
 
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
@@ -365,7 +368,6 @@ module qgplsim
 
 		h = (nz)^(hp)  * var_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17
-		KerVal = zeros(nz, nv)
         nstd = 3
 			for i in 1:nv
                 if abs(v[i] - mean_v) > nstd*var_v
@@ -373,11 +375,14 @@ module qgplsim
                 else
                     hi = h
                 end
-                
-				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
-                vi = reshape(vz .- v[i], nz, 1)
+                ind = Vector(1:nz)
+				# popat!(ind, i)
+				vzi = vz[ind] .- v[i]
+				yzi = yz[ind]
+				KerVal = ker.(vzi / hi)/hi
+                vzi = reshape(vzi, nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yz, vi, KerVal[:,i], tau, d)
+                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d)
 
                 if d == 1
                     DGz[i] = wi[2]
@@ -412,7 +417,7 @@ module qgplsim
 		h = (nz)^(hp) * var_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17
 		KerVal = zeros(nz, nv)
-        nstd = 1.5
+        nstd = 3.0
 			for i in 1:nv
                 if abs(v[i] - mean_v) > nstd*var_v
                     hi = exp(abs(v[i] - mean_v) / var_v / nstd^2) * h 
@@ -422,10 +427,10 @@ module qgplsim
                     d = 1
                 end
                 
-				KerVal[:, i] = ker.((vz .- v[i]) / hi)/hi
+				KerVal = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yz, vi, KerVal[:,i], tau, d)
+                wi = localLinear_quantReg.solver(yz, vi, KerVal, tau, d)
 
 				Gz[i] = wi[1]
 
