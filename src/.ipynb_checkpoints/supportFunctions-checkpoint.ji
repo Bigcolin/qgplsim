@@ -7,11 +7,12 @@ function epker(x)
     return 0.75 * (1 - x^2) * i
 end
 function gsker(x)
-    exp(- x^2 / 2)
+    pdf(distribution_ker, x)
+    # exp(- x^2 / 2)
 end
 
 function ker(x)
-    epker(x)
+    gsker(x)
 end
 
 function ker(x::Vector, h::Float64)
@@ -44,6 +45,11 @@ function ρ(x, α::Vector{Float64}) # for cqr
     for k in 1:lena
         res += rho(x, α[k])
     end
+    res
+end
+
+function rho_eps(r, a, e)
+    res = rho(r, a) + e/2 * log(e + abs(r))
     res
 end
 

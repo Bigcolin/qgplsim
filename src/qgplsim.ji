@@ -88,18 +88,16 @@ module qgplsim
 		elseif alpha_type == 1
 			alpha = alpha_ # s./ alpha_[1]
 			theta = theta_
-
 		end
-		# alpha = alpha ./ alpha[1]
+		data.alpha = alpha
+		data.theta = theta
 		if sum(abs.(data.Z)) < 1  # no Z 
 			gamma, beta = 0, 0
 		else
-			gamma, beta = z_estimator(data, alpha, theta)
+			gamma, beta = z_estimator(data)
 		end
-		data.alpha = alpha
 		data.beta = beta
 		data.gamma = gamma
-		data.theta = theta
 		return alpha, gamma, theta, beta
 	end
 
@@ -198,7 +196,41 @@ module qgplsim
 
 	end
 
-	function z_estimator(data::model, alpha, theta)
+				# Xzi = Xz[i, :]
+				# Xi = Xz - (Xzi)
+				# ind = Vector(1:nz)
+				# popat!(ind, i)
+				# Xi = Xi[ind, :]
+				# yzi = yz[ind]
+				# # Xi = -Xi
+				# KerVal = ker(Xi, h)
+
+    function bandwidth_v(m::model, widthExp = -0.17) # CV(1) estimationg for bandwidth
+        v = m.X * m.alpha
+		y = m.y - m.X * m.theta 
+        ncateg = m.index.count
+		n,p = size(m.X)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:ncateg
+            indk = m.index[m.categ[k]] 
+            vz = v[indk]
+            yz = y[indk]
+            nz = length(vz)
+            for j in 1:nz
+                indz = Vector(1:nz)
+                popat!(indz, j)
+                indj = indk[j]
+            
+                vz_j = vz[indz]
+                yz_j = yz[indz]
+                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
+                end
+        end
+        bias = rho.(y .- res, m.quantileNum) |> sum / n
+    end
+
+	function z_estimator(data::model)
 		# alpha = alpha ./ alpha[1]
 		# alpha = [1.0, 2.0] 
 		# theta = [2.0 -1.0]
@@ -214,14 +246,14 @@ module qgplsim
 		else
 			X = data.X
 		end
-		v = X * alpha
+		v = X * data.alpha
 		gamma, beta = zeros(q), zeros(q)
-        max_v = maximum(v)
-        min_v = minimum(v)
-        widv =   max_v - min_v    
-        v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
+        # max_v = maximum(v)
+        # min_v = minimum(v)
+        # widv =   max_v - min_v    
+        # v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
     
-		y = data.y  - data.X * theta # c1 = 0
+		y = data.y  - data.X * data.theta # c1 = 0
 		τ = data.quantileNum
         hp = data.widthExp
 		index = deepcopy(data.index)
@@ -411,16 +443,16 @@ module qgplsim
         # widv =   max_v - min_v    
         # vz = ((vz .- min_v) / widv .- 0.5) * 5 
         # v = ((v .- min_v) / widv .- 0.5) * 5
-		var_v =  std(vz)
+		std_v =  std(vz)
         mean_v = mean(vz)
 
-		h = (nz)^(hp) * var_v 
+		h = (nz)^(hp) * std_v 
         # h = (h > 0.17) * h + (h < 0.17) * 0.17
 		KerVal = zeros(nz, nv)
         nstd = 3.0
 			for i in 1:nv
-                if abs(v[i] - mean_v) > nstd*var_v
-                    hi = exp(abs(v[i] - mean_v) / var_v / nstd^2) * h 
+                if abs(v[i] - mean_v) > nstd*std_v
+                    hi = exp(abs(v[i] - mean_v) / std_v / nstd^2) * h 
                     d = 0
                 else
                     hi = h

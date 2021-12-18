@@ -1,0 +1,516 @@
+
+module qgplsim
+	include("supportFunctions.ji")
+	include("localLinear_quantReg.ji")
+	using LinearAlgebra, Distributions, Random, Statistics
+    using GLM, QuantReg, DataFrames, CSV, CategoricalArrays
+	using Clustering
+
+	function Base.:-(X::Matrix, xi::Vector)
+		n, p = size(X)
+		Xi = repeat(xi|>transpose, n, 1)
+		_Xi = X - Xi
+		_Xi
+	end
+
+
+
+	mutable struct model
+		X::Matrix{Float64}
+		Z # ::Matrix{Float64}
+		y::Vector{Float64}
+		categ::Vector # cannot ensure z is Int 
+		index::Dict
+		quantileNum
+        widthExp::Float64
+        intercept::Int
+
+		alpha
+		gamma
+		theta # ::Vector{Float64}
+		beta # ::Vector{Float64}
+		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
+			categ, index = collection(Z)
+			new(X, Z, y, categ, index, τ, widthExp, intercept)
+		end
+
+
+	end
+
+	function predict(m::model, x::Matrix, z::Vector, d = 0)
+
+		v = m.X * m.alpha + m.Z .* m.gamma
+		y = m.y - m.X * m.theta - m.Z * m.beta
+		n,p = size(x)
+		res = zeros(n)
+		
+		for k in 1:n
+			zk = z[k]
+			vz = v[m.index[zk]]
+			yz = y[m.index[zk]]
+			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+		end
+		res
+		
+	end
+
+	function predict(m::model, x::Matrix, z::Matrix, d = 0)
+
+		v = x * m.alpha + z * m.gamma # * 0.83
+  		vm = m.X * m.alpha + m.Z * m.gamma  # * 0.83
+		ym = m.y - m.X * m.theta - m.Z * m.beta
+		n,p = size(x)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:n
+			zk = z[k,:]
+			vz = vm[m.index[zk]]
+			yz = ym[m.index[zk]]
+            if d < 2
+                res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+            else
+                res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp)[1]
+
+            end
+            # if res[k] == 0
+            #     println(k, " ", zk, " ", v[k])
+            # end
+		end
+		res
+		
+	end
+	function estimator(data::model, alpha_type = 1)
+		alpha_,  theta_ = x_estimator(data)
+		
+		if alpha_type == 0
+			alpha = [-1.0, 1.0, 0.5]	
+			theta = [1.0 -2.0]
+		elseif alpha_type == 1
+			alpha = alpha_ # s./ alpha_[1]
+			theta = theta_
+		end
+		data.alpha = alpha
+		data.theta = theta
+		if sum(abs.(data.Z)) < 1  # no Z 
+			gamma, beta = 0, 0
+		else
+			gamma, beta = z_estimator(data)
+		end
+		data.beta = beta
+		data.gamma = gamma
+		return alpha, gamma, theta, beta
+	end
+
+	function x_estimator(data::model)
+		X, Z, y, tau = data.X, data.Z, data.y, data.quantileNum
+		
+		n, p = size(X)
+		categ, index = data.categ, data.index
+		ncateg = index.count
+
+		αz = zeros(ncateg, p)
+		Bz = zeros(n, p + data.intercept)
+		for k in 1:ncateg
+			z = categ[k]
+			indz = index[z]
+			nz = length(indz)
+			az = zeros(nz)
+			# bz = zeros(nz, p)
+			yz = y[indz]
+			Xz = X[indz, :]
+			mean_xz = mean(Xz, dims=1)
+			ht = var(Xz, dims = 1)
+			# ht = xzmax - xzmin
+			# ht = ones(p)
+			# println(ht)
+			# hh = 1
+			h = ones(p) .* nz^(-1 / (p + 6))
+			# println(h)
+			for i in 1:p
+				h[i] = h[i] * ht[i] 
+               # h[i] = (h[i] > 0.67) * h[i] + (h[i] < 0.67) * 0.67
+
+			end
+			# println(h)	
+
+			for i in 1:nz 
+				Xzi = Xz[i, :]
+				Xi = Xz - (Xzi)
+				ind = Vector(1:nz)
+				popat!(ind, i)
+				Xi = Xi[ind, :]
+				yzi = yz[ind]
+				# Xi = -Xi
+				KerVal = ker(Xi, h)
+				if data.intercept == 1
+					Xi = [ones(nz, 1) Xi]
+				end
+			# the accuracy of alpha plays the mvp in qgplsim, so 
+			# we move the estimation of alpha to localLinear_quantReg.ji
+			# for further consideration and improvement.
+                # wi = localLinear_quantReg.npqr_ft(yz, Xi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1)
+
+				az[i] = wi[1]
+				Bz[indz[i],:] = wi[2:end]
+                # println(KerVal)
+			end
+		end
+
+        # println(Bz)
+		nij = Int(n * (n - 1) / 2)
+		bz = zeros(nij, p + data.intercept)
+		ij = 1
+		for i in 1:n - 1 # Int(n/2)
+			for j in (i + 1) : n # (Int(n/2) + 1):n
+				bz[ij, :] = Bz[i, :] - Bz[j, :]
+				ij = ij + 1
+
+			end
+		end
+		Rbz = kmeans(bz |> transpose, 2)
+		# println(Rbz.centers)
+       		bz1 = Rbz.centers[:, 1]
+        	bz2 = Rbz.centers[:, 2]
+            
+		if bz1[1] > 0
+			bz2 = -bz2
+		else
+			bz1 = -bz1
+		end
+		sum_Bz = bz1 + bz2
+		alpha = sum_Bz / norm(sum_Bz) 
+		if data.intercept == 1
+			alpha_t = alpha[2:end]
+			Bz_t = Bz[:, 2:end]
+		else
+			alpha_t = alpha
+			Bz_t = Bz
+		end
+		C = Bz_t * alpha_t ./ norm(alpha_t)^2
+		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
+		theta = theta[1,:] / n
+		# alpha_global = alpha_global ./ alpha_global[1]
+        sg = sign(alpha[1])
+		alpha .* sg, theta .* sg # Cz
+
+	end
+
+				# Xzi = Xz[i, :]
+				# Xi = Xz - (Xzi)
+				# ind = Vector(1:nz)
+				# popat!(ind, i)
+				# Xi = Xi[ind, :]
+				# yzi = yz[ind]
+				# # Xi = -Xi
+				# KerVal = ker(Xi, h)
+
+    function bandwidth_v(m::model, widthExp = -0.17) # CV(1) estimationg for bandwidth
+        v = m.X * m.alpha
+		y = m.y - m.X * m.theta 
+        ncateg = m.index.count
+		n,p = size(m.X)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:ncateg
+            indk = m.index[m.categ[k]] 
+            vz = v[indk]
+            yz = y[indk]
+            nz = length(vz)
+            for j in 1:nz
+                indz = Vector(1:nz)
+                popat!(indz, j)
+                indj = indk[j]
+            
+                vz_j = vz[indz]
+                yz_j = yz[indz]
+                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
+                end
+        end
+        bias = rho.(y .- res, m.quantileNum) |> sum / n
+    end
+
+	function z_estimator(data::model)
+		# alpha = alpha ./ alpha[1]
+		# alpha = [1.0, 2.0] 
+		# theta = [2.0 -1.0]
+        if typeof(data.Z) <: Vector
+            n = length(data.Z)
+            q = 1
+        else
+            n, q = size(data.Z)
+        end
+		n, p = size(data.X)
+		if data.intercept == 1
+			X = [ones(n, 1) data.X]
+		else
+			X = data.X
+		end
+		v = X * data.alpha
+		gamma, beta = zeros(q), zeros(q)
+        # max_v = maximum(v)
+        # min_v = minimum(v)
+        # widv =   max_v - min_v    
+        # v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
+    
+		y = data.y  - data.X * data.theta # c1 = 0
+		τ = data.quantileNum
+        hp = data.widthExp
+		index = deepcopy(data.index)
+		categ = collect(index)
+		ncateg = index.count
+		vv0, vv1 = -1e5, 1e5
+		v0, v1 = -1e5, 1e5
+		c0, c1 = 1, -1
+        
+			C0 = zeros(ncateg)
+			C1 = zeros(ncateg)
+			for k in 1:ncateg
+				vk = v[categ[k][2]]
+				min_vk = minimum(vk)
+				max_vk = maximum(vk)
+				h = (length(vk))^(hp) * std(vk)    # * (max_vk - min_vk)/2
+				tail = h # (max_vk - min_vk)/10
+				vmin = min_vk + 2 * tail
+				vmax = max_vk - 2 * tail
+				if vv0 < vmin
+					vv0 = vmin
+				end
+
+				if vv1 > vmax
+					vv1 = vmax
+				end
+			end
+			v0, v1 = vv0, vv1
+			nstep = 0
+			step = (v1 - v0)/40
+
+			while nstep < 5 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
+				for k in 1:ncateg
+					vk = v[categ[k][2]]
+					yk = y[categ[k][2]]
+
+					v_ = vk[vk .> v1]
+					if v_ == []
+						v_ = [v1]
+					end
+					_v = vk[vk .< v0]
+					if _v == []
+						_v = [v0]
+					end
+					
+					v_ = minimum(v_) # vk[vk .> v1]
+					_v = maximum(_v) # vk[vk .< v0]
+
+					C0[k] = Gz(_v, vk, yk, 1, τ)[1]
+					C1[k] = Gz(v_, vk, yk, 1, τ)[1]
+				end
+			
+				c0 = maximum(C0)
+				c1 = minimum(C1)
+
+
+				if c0 > c1 
+		 			v0 = v0 - step
+		 			v1 = v1 + step
+                    nstep = nstep + 1
+		 		end
+		 	end
+            # C1 = C1[C1 .> C0]
+            # c1 = minimum(C1)
+
+		for i in 1:ncateg
+			ΔdJ = zeros(ncateg - 1)
+			ΔZ = transpose(hcat(keys(index)...))
+			categ = collect(index)
+			ΔZ = ΔZ[1:end, :] - ΔZ[i, :]
+			tdz = ΔZ[i, :]
+			ΔZ[i, :] = ΔZ[1, :]
+			ΔZ = ΔZ[2:end, :]
+
+			tdc = categ[i, :]
+			categ[i, :] = categ[1, :]
+			categ[1, :] = tdc
+			# ord_gl = 5
+			vz = v[categ[1][2]]
+			yz = y[categ[1][2]]
+			dg1(u) = Gz(u, vz, yz, 1, τ, hp)[1]
+
+			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
+			for k in 1:ncateg - 1
+				
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+				dgk(u) = Gz(u, vk, yk, 1, τ, hp)[1]
+				ΔdJ[k] = ΔdJ[k] + glquad(dgk, v0, v1, c0, c1)
+			end
+            # println(ΔdJ)
+			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ ./(c1 - c0)
+            		# println(i, ": ", gammai)
+      			gamma = gamma + gammai 
+
+			# estimation for β
+			z1 = categ[1][1]
+			ΔJ = zeros(ncateg - 1)
+			
+			vz = v[categ[1][2]]
+			yz = y[categ[1][2]]
+			g1(u) = Gz(u, vz, yz, 0, τ, hp)[1]
+			d1 =  sum(z1 .* gammai)
+			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
+
+			for k in 1:ncateg - 1
+				zk = categ[k][1]
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+				gk(u) = Gz(u, vk , yk, 0, τ, hp)[1]
+				dk = sum(zk .* gammai)
+				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
+
+			end
+
+			ΔZ = - ΔZ
+			# ng = gamma ./ norm(gamma)
+			# beta = ng[end:-1:1] # only for q = 2
+			# beta[1] = -beta[1]
+			# w = ΔJ ./ (ΔZ * beta) / (v1 - v0)
+			# beta = mean(w) .* beta
+			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
+			beta = beta + betai
+		end
+		gamma/ncateg, beta/ncateg
+	end
+
+
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+		nz = length(vz)
+		nv = length(v)
+		Gz = zeros(nv)
+		DGz = zeros(nv)
+        # max_v = maximum(vz)
+        # min_v = minimum(vz)
+        # widv =   max_v - min_v    
+        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
+        # v = ((v .- min_v) / widv .- 0.5) * 5
+		var_v =  std(vz)
+        mean_v = mean(vz)
+
+		h = (nz)^(hp)  * var_v 
+        # h = (h > 0.17) * h + (h < 0.17) * 0.17
+        nstd = 3
+			for i in 1:nv
+                if abs(v[i] - mean_v) > nstd*var_v
+                    hi = exp(abs(v[i] - mean_v) / var_v / nstd^2) * h 
+                else
+                    hi = h
+                end
+                ind = Vector(1:nz)
+				# popat!(ind, i)
+				vzi = vz[ind] .- v[i]
+				yzi = yz[ind]
+				KerVal = ker.(vzi / hi)/hi
+                vzi = reshape(vzi, nz, 1)
+                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d)
+
+                if d == 1
+                    DGz[i] = wi[2]
+                end
+				Gz[i] = wi[1]
+
+			end
+			if d == 1
+				return DGz
+			else
+				return Gz
+			end
+	end
+
+
+
+	function adaptive_Gz(v, vz, yz, tau = 0.5, hp = -0.17)
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+		nz = length(vz)
+		nv = length(v)
+		Gz = zeros(nv)
+        # max_v = maximum(vz)
+        # min_v = minimum(vz)
+        # widv =   max_v - min_v    
+        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
+        # v = ((v .- min_v) / widv .- 0.5) * 5
+		std_v =  std(vz)
+        mean_v = mean(vz)
+
+		h = (nz)^(hp) * std_v 
+        # h = (h > 0.17) * h + (h < 0.17) * 0.17
+		KerVal = zeros(nz, nv)
+        nstd = 3.0
+			for i in 1:nv
+                if abs(v[i] - mean_v) > nstd*std_v
+                    hi = exp(abs(v[i] - mean_v) / std_v / nstd^2) * h 
+                    d = 0
+                else
+                    hi = h
+                    d = 1
+                end
+                
+				KerVal = ker.((vz .- v[i]) / hi)/hi
+                vi = reshape(vz .- v[i], nz, 1)
+                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
+                wi = localLinear_quantReg.solver(yz, vi, KerVal, tau, d)
+
+				Gz[i] = wi[1]
+
+			end
+
+		Gz
+	end
+
+# function G(v, Z, y, tau = 0.5, hp = -0.17)
+# 		# Estimate Q(y) = g(v + Zγ)
+# 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+# 		n, q = size(Z)
+# 		categ, index, = collection(Z)
+# 		ncateg = index.count
+# 		Gz = zeros(n)
+# 		DGz = zeros(n)
+    
+# 		max_v = maximum(v)
+#         min_v = minimum(v)
+#         widv =   max_v - min_v    
+#         v = ((v .- min_v) / widv .- 0.5) * 4
+    
+# 		for k in 1:ncateg
+# 			z = categ[k]
+# 			indz = index[z]
+# 			nz = length(indz)
+# 			dgz = zeros(nz)
+# 			gz = zeros(nz)
+# 			yz = y[indz]
+# 			vz = v[indz]
+
+# 			h = (nz)^(hp) * var(vz) 
+        
+# 			KerVal = zeros(nz, nz)
+# 			for i in 1:nz
+# 				KerVal[:, i] = ker.((vz .- vz[i]) / h)/h
+#                 wi = localLinear_quantReg.npqr_fit(yz, vz .- v[i], KerVal[:,i], tau)
+            
+# 				dgz[i] = wi[2]
+# 				DGz[indz[i]] = wi[2]
+
+# 				gz[i] = wi[1]
+# 				Gz[indz[i]] = wi[1]
+# 			end
+# 		end
+# 		Gz, DGz
+
+# 	end
+
+end # module
