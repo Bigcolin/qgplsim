@@ -23,21 +23,21 @@ module qgplsim
 		index::Dict
 		quantileNum
         widthExp::Float64
+        method::String
         intercept::Int
-
 		alpha
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
+		function model(X, Z, y, τ = 0.5, widthExp = -0.17, method = "mean", intercept = 0)
 			categ, index = collection(Z)
-			new(X, Z, y, categ, index, τ, widthExp, intercept)
+			new(X, Z, y, categ, index, τ, widthExp, method, intercept)
 		end
 
 
 	end
 
-	function predict(m::model, x::Matrix, z::Vector, d = 0)
+	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
 
 		v = m.X * m.alpha + m.Z .* m.gamma
 		y = m.y - m.X * m.theta - m.Z * m.beta
@@ -48,13 +48,13 @@ module qgplsim
 			zk = z[k]
 			vz = v[m.index[zk]]
 			yz = y[m.index[zk]]
-			res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+			res[k] = Gz(v[k], vz, yz, dv, m.quantileNum, m.widthExp)[1]
 		end
 		res
 		
 	end
 
-	function predict(m::model, x::Matrix, z::Matrix, d = 0)
+	function predict(m::model, x::Matrix, z::Matrix, dv = 0)
 
 		v = x * m.alpha + z * m.gamma # * 0.83
   		vm = m.X * m.alpha + m.Z * m.gamma  # * 0.83
@@ -66,8 +66,8 @@ module qgplsim
 			zk = z[k,:]
 			vz = vm[m.index[zk]]
 			yz = ym[m.index[zk]]
-            if d < 2
-                res[k] = Gz(v[k], vz, yz, d, m.quantileNum, m.widthExp)[1]
+            if dv < 2
+                res[k] = Gz(v[k], vz, yz, dv, m)[1]
             else
                 res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp)[1]
 
@@ -91,6 +91,7 @@ module qgplsim
 		end
 		data.alpha = alpha
 		data.theta = theta
+        data.widthExp = bandwidth_selection(data)
 		if sum(abs.(data.Z)) < 1  # no Z 
 			gamma, beta = 0, 0
 		else
@@ -148,8 +149,7 @@ module qgplsim
 			# the accuracy of alpha plays the mvp in qgplsim, so 
 			# we move the estimation of alpha to localLinear_quantReg.ji
 			# for further consideration and improvement.
-                # wi = localLinear_quantReg.npqr_ft(yz, Xi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1)
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, "optim")
 
 				az[i] = wi[1]
 				Bz[indz[i],:] = wi[2:end]
@@ -205,7 +205,7 @@ module qgplsim
 				# # Xi = -Xi
 				# KerVal = ker(Xi, h)
 
-    function bandwidth_v(m::model, widthExp = -0.17) # CV(1) estimationg for bandwidth
+    function bandwidth_cv1(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
         v = m.X * m.alpha
 		y = m.y - m.X * m.theta 
         ncateg = m.index.count
@@ -225,9 +225,47 @@ module qgplsim
                 vz_j = vz[indz]
                 yz_j = yz[indz]
                 res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
-                end
+            end
         end
-        bias = rho.(y .- res, m.quantileNum) |> sum / n
+        bias = rho.(y .- res, m.quantileNum) |> sum 
+        bias = bias / (2n)
+    end
+
+    function bandwidth_cv2(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
+        v = m.X * m.alpha
+		y = m.y - m.X * m.theta - m.Z * m.beta
+        ncateg = m.index.count
+		n,p = size(m.X)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:ncateg
+            indk = m.index[m.categ[k]] 
+            vz = v[indk]
+            yz = y[indk]
+            nz = length(vz)
+            for j in 1:nz
+                indz = Vector(1:nz)
+                popat!(indz, j)
+                indj = indk[j]
+            
+                vz_j = vz[indz]
+                yz_j = yz[indz]
+                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
+            end
+        end
+        bias = rho.(y .- res, m.quantileNum) |> sum 
+        bias = bias / (2n)
+    end
+
+    function bandwidth_selection(m::model)
+        bw = -0.20:0.015:0.10
+        nbw = length(bw)
+        bw_path = zeros(nbw)
+        for j in 1:nbw
+            bw_path[j] = qgplsim.bandwidth_cv1(m, bw[j])
+        end
+        ind = argmin(bw_path)
+        bandwidth_exp = bw[ind]
     end
 
 	function z_estimator(data::model)

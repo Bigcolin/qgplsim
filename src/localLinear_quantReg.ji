@@ -34,23 +34,33 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="optim")
-        y = yi .* w 
-        n = length(y)
-        if dv == 1
-            X = [ones(n, 1) Xi] .* w 
+    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="mean")
+        n = length(yi)
+        if dv == 1 || method == "mean"
+            X = [ones(n, 1) Xi] 
         else
-            X = ones(n, 1) .* w
+            X = ones(n, 1) 
         end
         n, d = size(X)
         b0 = zeros(d)
-        if method == "optim"		
+        if method == "optim"	   
+            y = yi .* w 
+            X = X .* w
             r(x) = ρ(x, tau)
             tarfunc(b::Vector) = sum(r.(y - X*b))
             res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-6)
             b0 = Optim.minimizer(res)
+        
+        elseif method == "mean"
+            y = yi  
+            X = X
+            W = Diagonal(w)
+            b0 = pinv(transpose(X) * W * X)*transpose(X) * W * y
+        
         elseif  method == "mm"
-            t0 = pinv(transpose(X) * X)*transpose(X) * y
+            y = yi .* w 
+            X = X .* w
+            t0 = pinv(transpose(X) * X)*transpose(X)* y
             b0 = mmqr(y, X, tau, t0)
         end
         return b0
