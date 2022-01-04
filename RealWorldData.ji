@@ -4,6 +4,32 @@ using Base.Threads
 
 include("./src/supportFunctions.ji")
 
+function boston(noz = "age") # names of x, y, and z
+    filename = "./datasets/Boston.csv"
+    data = DataFrame(CSV.File(filename))
+    df = copy(data)
+    dropmissing!(df)
+    ndf = names(df)
+
+
+    name_of_y = :medv
+    names_of_x =  ["rm", "lstat", "dis"] # 3:8
+    if noz == "rad"
+        names_of_z =[:rad] # :pos
+        g1, g2 = 4, 8
+    elseif noz == "age"
+        names_of_z = [:age]
+        g1, g2 = 40, 80
+    end
+    dfy = df[!, name_of_y]
+    dfX = df[!, names_of_x]
+    dfZ = df[!, names_of_z]
+
+    X, Z, y = Array(dfX), Array(dfZ), Array(dfy)
+    Z = (Z .> g1) .+ (Z .> g2) .+ 0
+    # Z = categ_binary(Z)
+    X, Z, y
+end
 function califdata(stds = 3)
     filename = "./datasets/housing.csv"
     chdata = DataFrame(CSV.File(filename))

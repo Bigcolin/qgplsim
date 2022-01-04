@@ -23,15 +23,14 @@ module qgplsim
 		index::Dict
 		quantileNum
         widthExp::Float64
-        method::String
         intercept::Int
 		alpha
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-		function model(X, Z, y, τ = 0.5, widthExp = -0.17, method = "mean", intercept = 0)
+		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
 			categ, index = collection(Z)
-			new(X, Z, y, categ, index, τ, widthExp, method, intercept)
+			new(X, Z, y, categ, index, τ, widthExp, intercept)
 		end
 
 
@@ -56,8 +55,8 @@ module qgplsim
 
 	function predict(m::model, x::Matrix, z::Matrix, dv = 0)
 
-		v = x * m.alpha + z * m.gamma # * 0.83
-  		vm = m.X * m.alpha + m.Z * m.gamma  # * 0.83
+		v = x * m.alpha + z * m.gamma 
+  		vm = m.X * m.alpha + m.Z * m.gamma  
 		ym = m.y - m.X * m.theta - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
@@ -91,9 +90,12 @@ module qgplsim
 		end
 		data.alpha = alpha
 		data.theta = theta
-        data.widthExp = bandwidth_selection(data)
+        if data.widthExp == 0
+            data.widthExp = bandwidth_selection(data)
+        end
 		if sum(abs.(data.Z)) < 1  # no Z 
-			gamma, beta = 0, 0
+            n, q = size(data.Z)
+			gamma, beta = zeros(q), zeros(q)
 		else
 			gamma, beta = z_estimator(data)
 		end
@@ -452,7 +454,7 @@ module qgplsim
 				KerVal = ker.(vzi / hi)/hi
                 vzi = reshape(vzi, nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d)
+                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, "optim")
 
                 if d == 1
                     DGz[i] = wi[2]
