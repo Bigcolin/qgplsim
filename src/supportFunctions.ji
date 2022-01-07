@@ -1,4 +1,6 @@
-using Distributions, LinearAlgebra, Statistics
+using DataFrames, CSV, DelimitedFiles
+using Statistics, LinearAlgebra, CategoricalArrays
+using Distributions, Clustering, Random
 
 distribution_ker = Normal(0, 1)
 

@@ -8,10 +8,17 @@ module qgplsim
 
 	function Base.:-(X::Matrix, xi::Vector)
 		n, p = size(X)
-		Xi = repeat(xi|>transpose, n, 1)
+        if length(xi) == p
+            Xi = repeat(xi|>transpose, n, 1)
+        elseif length(xi) == n
+            Xi = repeat(xi, 1, p)
+        else
+            println("the length of xi are not n or p")
+        end    
 		_Xi = X - Xi
 		_Xi
 	end
+    
 
 
 
@@ -28,25 +35,33 @@ module qgplsim
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
+		function model(X, Z, y, τ = [0.5], widthExp = -0.17, intercept = 0)
 			categ, index = collection(Z)
 			new(X, Z, y, categ, index, τ, widthExp, intercept)
 		end
 
 
 	end
+    
+    function print_model(m::model)
+        println("alpha => ", m.alpha)
+        println("theta => ", m.theta)
+        println("gamma => ", m.gamma)
+        println("beta => ", m.beta)
+    end
 
 	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
 
-		v = m.X * m.alpha + m.Z .* m.gamma
-		y = m.y - m.X * m.theta - m.Z * m.beta
+		v = x * m.alpha + z * m.gamma 
+		vm = m.X * m.alpha + m.Z .* m.gamma
+		ym = m.y - m.X * m.theta - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
 		
 		for k in 1:n
 			zk = z[k]
-			vz = v[m.index[zk]]
-			yz = y[m.index[zk]]
+			vz = vm[m.index[zk]]
+			yz = ym[m.index[zk]]
 			res[k] = Gz(v[k], vz, yz, dv, m.quantileNum, m.widthExp)[1]
 		end
 		res
@@ -71,9 +86,6 @@ module qgplsim
                 res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp)[1]
 
             end
-            # if res[k] == 0
-            #     println(k, " ", zk, " ", v[k])
-            # end
 		end
 		res
 		

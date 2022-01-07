@@ -34,7 +34,7 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="mean")
+    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="optim")
         n = length(yi)
         if dv == 1 || method == "mean"
             X = [ones(n, 1) Xi] 

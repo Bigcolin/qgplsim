@@ -8,10 +8,17 @@ module qgplsim
 
 	function Base.:-(X::Matrix, xi::Vector)
 		n, p = size(X)
-		Xi = repeat(xi|>transpose, n, 1)
+        if length(xi) == p
+            Xi = repeat(xi|>transpose, n, 1)
+        elseif length(xi) == n
+            Xi = repeat(xi, 1, p)
+        else
+            println("the length of xi are not n or p")
+        end    
 		_Xi = X - Xi
 		_Xi
 	end
+    
 
 
 
@@ -28,13 +35,20 @@ module qgplsim
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-		function model(X, Z, y, τ = 0.5, widthExp = -0.17, intercept = 0)
+		function model(X, Z, y, τ = [0.5], widthExp = -0.17, intercept = 0)
 			categ, index = collection(Z)
 			new(X, Z, y, categ, index, τ, widthExp, intercept)
 		end
 
 
 	end
+    
+    function print_model(m::model)
+        println("alpha => ", m.alpha)
+        println("theta => ", m.theta)
+        println("gamma => ", m.gamma)
+        println("beta => ", m.beta)
+    end
 
 	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
 

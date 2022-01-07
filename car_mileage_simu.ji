@@ -1,0 +1,51 @@
+
+include("./src/qgplsim.ji")
+include("./src/supportFunctions.ji")
+
+function get_cardata()
+
+    cardata = DataFrame(CSV.File("./datasets/auto-mpg.csv"))
+    indcar = cardata[:horsepower] .!= "?"
+    cardata = cardata[indcar,:]
+    cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
+    noy = :mpg
+    nox = [:displacement, :horsepower, :weight, :acceleration]
+    noz = :origin
+    
+    Xcar = Array(cardata[nox])
+    Zcar = Array(cardata[noz])
+    ycar = Array(cardata[noy])
+    X = scaler(Xcar, 1)
+    Z = categ_binary(Zcar)
+    y = copy(ycar)
+    X, Z, y
+end
+
+function get_train_index(Z, ntrain = 300)
+
+    categ, index = collection(Z) 
+    n, q = size(Z)
+    
+    if ntrain > n
+        ntrain = n - 100
+    end   
+    
+    ncateg = q + 1     
+    prop = zeros(q + 1)
+    prop[1:q] = sum(Z, dims = 1) ./ n
+    prop[q + 1] = 1 - sum(prop)
+    each_ntrain = Int.(round.(ntrain .* prop))
+    indr = [] # ind_train
+    for k in 1:ncateg
+        zk = categ[k]
+        indzk = index[zk]
+        indk = shuffle(1:length(indzk))
+        indr = [indzk[indk[1:each_ntrain[k]]]; indr]
+    end
+    
+    indn = Array(1:n)
+    indt = [x in indr for x in indn]
+    indt = Bool.(1 .- indt)
+    indr, indt
+    
+end
