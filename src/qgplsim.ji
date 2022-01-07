@@ -1,3 +1,4 @@
+# Q(y) = X alpha + Z beta + g(X theta + Z gamma)
 
 module qgplsim
 	include("supportFunctions.ji")
@@ -52,9 +53,9 @@ module qgplsim
 
 	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
 
-		v = x * m.alpha + z * m.gamma 
-		vm = m.X * m.alpha + m.Z .* m.gamma
-		ym = m.y - m.X * m.theta - m.Z * m.beta
+		v = x * m.theta + z * m.gamma 
+		vm = m.X * m.theta + m.Z .* m.gamma
+		ym = m.y - m.X * m.alpha - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
 		
@@ -70,9 +71,9 @@ module qgplsim
 
 	function predict(m::model, x::Matrix, z::Matrix, dv = 0)
 
-		v = x * m.alpha + z * m.gamma 
-  		vm = m.X * m.alpha + m.Z * m.gamma  
-		ym = m.y - m.X * m.theta - m.Z * m.beta
+		v = x * m.theta + z * m.gamma 
+  		vm = m.X * m.theta + m.Z * m.gamma  
+		ym = m.y - m.X * m.alpha - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
 		# categ, index = collection(z)
@@ -90,16 +91,12 @@ module qgplsim
 		res
 		
 	end
-	function estimator(data::model, alpha_type = 1)
-		alpha_,  theta_ = x_estimator(data)
-		
-		if alpha_type == 0
-			alpha = [-1.0, 1.0, 0.5]	
-			theta = [1.0 -2.0]
-		elseif alpha_type == 1
-			alpha = alpha_ # s./ alpha_[1]
-			theta = theta_
-		end
+	function estimator(data::model)
+		theta_,  alpha_ = x_estimator(data)
+
+		alpha = alpha_ # s./ alpha_[1]
+		theta = theta_
+        
 		data.alpha = alpha
 		data.theta = theta
         if data.widthExp == 0
@@ -113,7 +110,7 @@ module qgplsim
 		end
 		data.beta = beta
 		data.gamma = gamma
-		return alpha, gamma, theta, beta
+		return theta, gamma, alpha, beta
 	end
 
 	function x_estimator(data::model)
@@ -220,8 +217,8 @@ module qgplsim
 				# KerVal = ker(Xi, h)
 
     function bandwidth_cv1(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
-        v = m.X * m.alpha
-		y = m.y - m.X * m.theta 
+        v = m.X * m.theta
+		y = m.y - m.X * m.alpha
         ncateg = m.index.count
 		n,p = size(m.X)
 		res = zeros(n)
@@ -246,8 +243,8 @@ module qgplsim
     end
 
     function bandwidth_cv2(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
-        v = m.X * m.alpha
-		y = m.y - m.X * m.theta - m.Z * m.beta
+        v = m.X * m.theta
+		y = m.y - m.X * m.alpha - m.Z * m.beta
         ncateg = m.index.count
 		n,p = size(m.X)
 		res = zeros(n)
@@ -283,9 +280,7 @@ module qgplsim
     end
 
 	function z_estimator(data::model)
-		# alpha = alpha ./ alpha[1]
-		# alpha = [1.0, 2.0] 
-		# theta = [2.0 -1.0]
+
         if typeof(data.Z) <: Vector
             n = length(data.Z)
             q = 1
@@ -298,14 +293,14 @@ module qgplsim
 		else
 			X = data.X
 		end
-		v = X * data.alpha
+		v = X * data.theta
 		gamma, beta = zeros(q), zeros(q)
         # max_v = maximum(v)
         # min_v = minimum(v)
         # widv =   max_v - min_v    
         # v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
     
-		y = data.y  - data.X * data.theta # c1 = 0
+		y = data.y  - data.X * data.alpha # c1 = 0
 		τ = data.quantileNum
         hp = data.widthExp
 		index = deepcopy(data.index)

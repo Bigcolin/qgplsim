@@ -69,7 +69,7 @@ include("supportFunctions.ji")
     function mmqr(yi, Xi, tau, theta0, eps = 0.07, tol = 1e-6)
         q = tau[1]
         thetak = theta0 .+ 1000*tol
-        max_iter = 1000
+        max_iter = 200
         k = 0
         while norm(thetak - theta0) > tol && k < max_iter
 
