@@ -7,22 +7,6 @@ module qgplsim
     using GLM, QuantReg, DataFrames, CSV, CategoricalArrays
 	using Clustering
 
-	function Base.:-(X::Matrix, xi::Vector)
-		n, p = size(X)
-        if length(xi) == p
-            Xi = repeat(xi|>transpose, n, 1)
-        elseif length(xi) == n
-            Xi = repeat(xi, 1, p)
-        else
-            println("the length of xi are not n or p")
-        end    
-		_Xi = X - Xi
-		_Xi
-	end
-    
-
-
-
 	mutable struct model
 		X::Matrix{Float64}
 		Z # ::Matrix{Float64}
@@ -69,7 +53,7 @@ module qgplsim
 		
 	end
 
-	function predict(m::model, x::Matrix, z::Matrix, dv = 0)
+	function predict(m::model, x::Matrix, z::Matrix, dv = 0, method = "optim")
 
 		v = x * m.theta + z * m.gamma 
   		vm = m.X * m.theta + m.Z * m.gamma  
@@ -82,9 +66,9 @@ module qgplsim
 			vz = vm[m.index[zk]]
 			yz = ym[m.index[zk]]
             if dv < 2
-                res[k] = Gz(v[k], vz, yz, dv, m)[1]
+                res[k] = Gz(v[k], vz, yz, dv, m.quantileNum, m.widthExp, method)[1]
             else
-                res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp)[1]
+                res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp, method)[1]
 
             end
 		end
@@ -429,7 +413,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17)
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
@@ -461,7 +445,7 @@ module qgplsim
 				KerVal = ker.(vzi / hi)/hi
                 vzi = reshape(vzi, nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, "optim")
+                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
 
                 if d == 1
                     DGz[i] = wi[2]
@@ -478,7 +462,7 @@ module qgplsim
 
 
 
-	function adaptive_Gz(v, vz, yz, tau = 0.5, hp = -0.17)
+	function adaptive_Gz(v, vz, yz, tau = 0.5, hp = -0.17, method = "optim")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
@@ -509,7 +493,7 @@ module qgplsim
 				KerVal = ker.((vz .- v[i]) / hi)/hi
                 vi = reshape(vz .- v[i], nz, 1)
                 # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yz, vi, KerVal, tau, d)
+                wi = localLinear_quantReg.solver(yz, vi, KerVal, tau, d, method)
 
 				Gz[i] = wi[1]
 

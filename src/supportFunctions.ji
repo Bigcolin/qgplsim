@@ -2,8 +2,22 @@ using DataFrames, CSV, DelimitedFiles
 using Statistics, LinearAlgebra, CategoricalArrays
 using Distributions, Clustering, Random
 
-distribution_ker = Normal(0, 1)
 
+function Base.:-(X::Matrix, xi::Vector)
+    n, p = size(X)
+    if length(xi) == p
+        Xi = repeat(xi|>transpose, n, 1)
+    elseif length(xi) == n
+        Xi = repeat(xi, 1, p)
+    else
+        println("the length of xi are not n or p")
+    end    
+    _Xi = X - Xi
+    _Xi
+end
+    
+distribution_ker = Normal(0, 1)
+    
 function epker(x)
     i = abs(x) <= 1
     return 0.75 * (1 - x^2) * i
@@ -100,11 +114,11 @@ function categ_binary(Z::T where T <:Array)
     res
 end
 
-function scaler(X, r)
+function scaler(X, stdv = 1.0)
     ntrain, = size(X)
-    Xr = (X - repeat(minimum(X, dims = 1), ntrain, 1))./ (repeat(maximum(X, dims = 1), ntrain, 1) - repeat(minimum(X, dims = 1), ntrain, 1))
-    Xr = Xr .* 2 .- 1
-    Xr = Xr .* r
+    Xr = X .- mean(X, dims = 1)
+    Xr = Xr ./ std(Xr, dims = 1) .* stdv
+    Xr 
 end
 
 function glquad(g, v0, v1, c0, c1, ng::Int = 11)
