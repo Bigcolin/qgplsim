@@ -10,7 +10,7 @@ function get_cardata()
     cardata = cardata[indcar,:]
     cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
     noy = :mpg
-    nox = [:horsepower, :weight, :acceleration] # :displacement,
+    nox = [:displacement, :weight, :acceleration, :horsepower] # 
     noz = :origin
     
     Xcar = Array(cardata[nox])

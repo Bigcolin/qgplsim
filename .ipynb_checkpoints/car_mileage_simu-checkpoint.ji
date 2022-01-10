@@ -10,7 +10,7 @@ function get_cardata()
     cardata = cardata[indcar,:]
     cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
     noy = :mpg
-    nox = [:horsepower, :weight, :acceleration] # :displacement,
+    nox = [:displacement, :weight, :acceleration, :horsepower] # 
     noz = :origin
     
     Xcar = Array(cardata[nox])
@@ -61,6 +61,7 @@ function mc_simu(tau, width_exp, ntrain = 320, n_pt = 10) # n_pt = times of mont
     Gamma = zeros(nmc, q)
     Alpha = zeros(nmc, p)
     Beta  = zeros(nmc, q)
+    mse = zeros(nmc)
     @threads for i in 1:Threads.nthreads()
         for j in 1:n_pt
                 t = (i - 1)*n_pt + j 
@@ -70,10 +71,16 @@ function mc_simu(tau, width_exp, ntrain = 320, n_pt = 10) # n_pt = times of mont
                 Xr, Zr, yr = X[indr, :], Z[indr, :], y[indr]
                 Xt, Zt, yt = X[indt, :], Z[indt, :], y[indt]
             
-                qsmodel = qgplsim.model(Xr, Zr, yr, tau, width_exp)
+                carmodel = qgplsim.model(Xr, Zr, yr, tau, width_exp)
 
                 Theta[t, :], Gamma[t, :],
-                Alpha[t, :], Beta[t, :] = qgplsim.estimator(qsmodel)
+                Alpha[t, :], Beta[t, :] = qgplsim.estimator(carmodel)
+                
+                vv = Xt * carmodel.theta
+                ylx = Xt * carmodel.alpha
+                ylz = Zt * carmodel.beta
+                gv = qgplsim.predict(carmodel, Xt, Zt, 2, "mean")
+                yp = gv + ylx + ylz
                 
         end
     end
