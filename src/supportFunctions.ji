@@ -69,6 +69,21 @@ function rho_eps(r, a, e)
     res
 end
 
+function collection(c)
+    n  = length(c)
+    categ_c = []
+    dict_c = Dict()
+    for i in 1:n
+        if c[i] in categ_c
+            push!(dict_c[c[i]], i)
+        else
+            push!(categ_c, c[i])
+            dict_c[c[i]] = [i]
+        end
+    end
+    # most_c = argmax(length.(dict_c[z] for z in categ_c))
+    categ_c, dict_c  # , categ_c[most_c]
+end
 
 function collection(c::Vector)
     n  = length(c)
@@ -106,8 +121,8 @@ function categ_binary(Z::T where T <:Array)
     n,  = size(Z)
     categ, index = collection(Z)
     ncateg = length(categ)
-    res = Int.(zeros(n, ncateg - 1))
-    for k in 1:ncateg - 1
+    res = Int.(zeros(n, ncateg))
+    for k in 1:ncateg
         zk = categ[k]
         res[index[zk], k] .= 1
     end
