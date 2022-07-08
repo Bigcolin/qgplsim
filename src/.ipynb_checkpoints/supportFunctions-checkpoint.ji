@@ -1,6 +1,6 @@
 using DataFrames, CSV, DelimitedFiles
 using Statistics, LinearAlgebra, CategoricalArrays
-using Distributions, Clustering, Random
+using Distributions, Clustering, Random, MLBase
 
 
 function Base.:-(X::Matrix, xi::Vector)
@@ -121,12 +121,47 @@ function categ_binary(Z::T where T <:Array)
     n,  = size(Z)
     categ, index = collection(Z)
     ncateg = length(categ)
-    res = Int.(zeros(n, ncateg))
+    res = Int.(zeros(n, ncateg))    
+    zmap = Dict()
     for k in 1:ncateg
+        bin_z = Int.(zeros(ncateg))
         zk = categ[k]
         res[index[zk], k] .= 1
+        bin_z[k] = 1
+        zmap[zk] = bin_z
     end
-    res
+    res, zmap
+end
+
+function get_train_index(Za, ntrain = 300)
+    Z, zmap = categ_binary(Za)
+    categ, index = collection(Z) 
+    n, q = size(Z)
+    
+    if ntrain > n
+        ntrain = n - 100
+    end   
+    
+    ncateg = q     
+    prop = zeros(q)
+    prop[1:q] = sum(Z, dims = 1) ./ n
+#     prop[q + 1] = 1 - sum(prop)
+#     println(prop)
+    each_ntrain = Int.(round.(ntrain .* prop))
+    indr = [] # ind_train
+    for k in 1:ncateg
+        zk = categ[k]
+        indzk = index[zk]
+        indk = shuffle(1:length(indzk))
+        indr = [indzk[indk[1:each_ntrain[k]]]; indr]
+    end
+    
+    indn = Array(1:n)
+    indt = [x in indr for x in indn]
+    indt = Bool.(1 .- indt)
+    indt = indn[indt]
+    indr, indt
+    
 end
 
 function scaler(X, stdv = 1.0)

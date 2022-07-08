@@ -1,5 +1,5 @@
 module localLinear_quantReg
-using Distributions, LinearAlgebra, QuantReg, GLM, DataFrames
+using Distributions, LinearAlgebra, GLM, DataFrames
 using Optim
 include("supportFunctions.ji")
 
@@ -48,20 +48,17 @@ include("supportFunctions.ji")
             X = X .* w
             r(x) = ρ(x, tau)
             tarfunc(b::Vector) = sum(r.(y - X*b))
-            res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-6)
+            res = Optim.optimize(tarfunc, zeros(d), method = BFGS(), f_tol = 1e-4)
             b0 = Optim.minimizer(res)
         
         elseif method == "mean"
-            y = yi  
-            X = X
-            W = Diagonal(w)
-            b0 = pinv(transpose(X) * W * X)*transpose(X) * W * y
+#             W = Diagonal(w)
+#             b0 = pinv(transpose(X) * W * X)*transpose(X) * W * yi
+            b0 = pinv(transpose(X .* w) * X)*transpose(X .* w) * yi
         
         elseif  method == "mm"
-            y = yi .* w 
-            X = X .* w
-            t0 = pinv(transpose(X) * X)*transpose(X)* y
-            b0 = mmqr(y, X, tau, t0)
+            t0 = pinv(transpose(X .* w) * X)*transpose(X .* w) * yi
+            b0 = mmqr(yi, X, tau, t0)
         end
         return b0
     end
@@ -69,7 +66,7 @@ include("supportFunctions.ji")
     function mmqr(yi, Xi, tau, theta0, eps = 0.07, tol = 1e-6)
         q = tau[1]
         thetak = theta0 .+ 1000*tol
-        max_iter = 200
+        max_iter = 300
         k = 0
         while norm(thetak - theta0) > tol && k < max_iter
 

@@ -5,7 +5,7 @@ using Base.Threads
 
 function get_cardata()
 
-    cardata = DataFrame(CSV.File("./datasets/auto-mpg.csv"))
+    cardata = DataFrame(CSV.File("~/Projects/Datasets/auto-mpg.csv"))
     indcar = cardata[:horsepower] .!= "?"
     cardata = cardata[indcar,:]
     cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
@@ -50,6 +50,34 @@ function get_train_index(Z, ntrain = 300)
     indr, indt
     
 end
+
+function  autompg_model()
+    cardata = DataFrame(CSV.File("~/Projects/Datasets/auto-mpg.csv"))
+    indcar = cardata[:horsepower] .!= "?"
+    cardata = cardata[indcar,:]
+    cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
+    noy = :mpg
+    nox = [:displacement, :weight, :acceleration, :horsepower] # 
+    noz = [:origin]
+
+    X = Array(cardata[!, nox]) |> scaler
+    Xtr, Xte = X[1:2:end, :], X[2:2:end, :]
+    y = Array(cardata[!, noy])
+    ytr, yte = y[1:2:end], y[2:2:end]
+    Z = Array(cardata[!, noz])
+    z, zmap = categ_binary(Z)
+    ztr, zte = z[1:2:end, :], z[2:2:end, :]
+
+    carmodel = qgplsim.model(Xtr, ztr, ytr)
+    qgplsim.estimator(carmodel)
+    vv = Xte * carmodel.theta
+    ylx = Xte * carmodel.alpha
+    ylz = zte * carmodel.beta
+    gv = qgplsim.predict(carmodel, Xte, zte, 2, "optim")
+    yp = gv + ylx + ylz
+    yp - yte
+end
+
 
 function mc_simu(tau, width_exp, ntrain = 320, n_pt = 10) # n_pt = times of montecarlo on per. thread
     X, Z, y = get_cardata()

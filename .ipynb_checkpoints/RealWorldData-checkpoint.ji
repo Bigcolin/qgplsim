@@ -3,7 +3,7 @@ include("./src/supportFunctions.ji")
 using Base.Threads
 
 function boston(noz = "age") # names of x, y, and z
-    filename = "./datasets/Boston.csv"
+    filename = "/Users/kyan/Projects/Datasets/Boston.csv"
     data = DataFrame(CSV.File(filename))
     df = copy(data)
     dropmissing!(df)
@@ -29,7 +29,7 @@ function boston(noz = "age") # names of x, y, and z
     X, Z, y
 end
 function califdata(stds = 3)
-    filename = "./datasets/housing.csv"
+    filename = "/Users/kyan/Projects/Datasets/housing.csv"
     chdata = DataFrame(CSV.File(filename))
     df = copy(chdata)
     dropmissing!(df)
@@ -44,7 +44,7 @@ function califdata(stds = 3)
 #     df[!, :lv_op] = levelcode.(dfop)
 #     df= df[df[!, :lv_op] .!= 5, :]
     df[!, :ocean_proximity][[8228, 8229, 8230, 8231, 8232]] .= "NEAR OCEAN"
-    df[!, :x1],df[!, :x2],df[!, :x3] = df.households./df.total_rooms, df.population./df.households, df.median_income
+    df[!, :x1],df[!, :x2],df[!, :x3] = df.total_rooms./df.households, df.population./df.households, df.median_income
 
     name_of_y = :median_house_value
     names_of_x = [:x1, :x2, :x3] # 3:8
@@ -74,7 +74,7 @@ end
 
 function get_cardata()
 
-    cardata = DataFrame(CSV.File("./datasets/auto-mpg.csv"))
+    cardata = DataFrame(CSV.File("/Users/kyan/Projects/Datasets/auto-mpg.csv"))
     indcar = cardata[:horsepower] .!= "?"
     cardata = cardata[indcar,:]
     cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 
@@ -86,13 +86,13 @@ function get_cardata()
     Zcar = Array(cardata[noz])
     ycar = Array(cardata[noy])
     X = scaler(Xcar, 1)
-    Z = categ_binary(Zcar)
+    Z, zmap = categ_binary(Zcar)
     y = copy(ycar)
-    X, Z, y
+    X, Z, y, zmap
 end
 
 function get_train_index(Za, ntrain = 300)
-    Z = categ_binary(Za)
+    Z, zmap = categ_binary(Za)
     categ, index = collection(Z) 
     n, q = size(Z)
     
@@ -117,6 +117,7 @@ function get_train_index(Za, ntrain = 300)
     indn = Array(1:n)
     indt = [x in indr for x in indn]
     indt = Bool.(1 .- indt)
+    indt = indn[indt]
     indr, indt
     
 end
@@ -131,7 +132,6 @@ function mc_simu(tau, width_exp, ntrain = 320, n_pt = 10) # n_pt = times of mont
     Gamma = zeros(nmc, q)
     Alpha = zeros(nmc, p)
     Beta  = zeros(nmc, q)
-    mse = zeros(nmc)
     @threads for i in 1:Threads.nthreads()
         for j in 1:n_pt
                 t = (i - 1)*n_pt + j 
