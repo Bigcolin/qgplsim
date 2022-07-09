@@ -1,5 +1,5 @@
 module localLinear_quantReg
-using Distributions, LinearAlgebra, QuantReg, GLM, DataFrames
+using Distributions, LinearAlgebra, GLM, DataFrames
 using Optim
 include("supportFunctions.ji")
 
@@ -34,7 +34,7 @@ include("supportFunctions.ji")
 #         res
 #     end
 
-    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="optim")
+    function solver(yi::Vector, Xi::Matrix, w::Vector, tau, dv = 1, method="optim_qr")
         n = length(yi)
         if dv == 1 || method == "mean"
             X = [ones(n, 1) Xi] 
@@ -43,7 +43,7 @@ include("supportFunctions.ji")
         end
         n, d = size(X)
         b0 = zeros(d)
-        if method == "optim"	   
+        if method == "optim_qr"	   
             y = yi .* w 
             X = X .* w
             r(x) = ρ(x, tau)

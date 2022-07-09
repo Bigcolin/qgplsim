@@ -74,7 +74,7 @@ end
 
 function get_cardata()
 
-    cardata = DataFrame(CSV.File("/Users/kyan/Projects/Datasets/auto-mpg.csv"))
+    cardata = DataFrame(CSV.File("/home/kyan/Projects/Datasets/auto-mpg.csv"))
     indcar = cardata[:horsepower] .!= "?"
     cardata = cardata[indcar,:]
     cardata[:horsepower] = parse.(Float64, cardata[:horsepower]) 

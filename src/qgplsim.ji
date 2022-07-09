@@ -39,10 +39,10 @@ module qgplsim
 	end
     
     function print_model(m::model)
-        println("alpha => ", m.alpha)
-        println("theta => ", m.theta)
-        println("gamma => ", m.gamma)
-        println("beta => ", m.beta)
+        println("alpha => ", round.(m.alpha, digits = 4))
+        println("theta => ", round.(m.theta, digits = 4))
+        println("gamma => ", round.(m.gamma, digits = 4))
+        println("beta => ", round.(m.beta, digits = 4))
     end
 
 	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
