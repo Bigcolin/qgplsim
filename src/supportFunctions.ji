@@ -201,3 +201,24 @@ function glquad(g, v0, v1, c0, c1, ng::Int = 11)
 	gv_ = c0 .* (gv .< c0) .+ c1 .* (gv .> c1) .+ gv .* (1 .- (gv .< c0) .- (gv .> c1)) 
 	transpose(gv_) * weigtht * (v1 - v0) ./ 2
 end
+
+
+function tabular(me, se, len = 4)
+    
+    me = string.(round.(me, digits = len))
+    se = string.(round.(se, digits = len))
+    for k in 1:length(me)
+        dm = len + 2 - length(me[k])
+        ds = len + 2 - length(se[k])
+        for i in 1:dm
+            me[k] = string(me[k], "0")
+        end
+        for i in 1:ds
+            se[k] = string(se[k], "0")
+        end
+        
+        se[k] = string("(", se[k][2:end], ")")
+
+    end
+    table = string.(me, se)
+end

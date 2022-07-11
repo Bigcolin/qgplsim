@@ -97,7 +97,7 @@ module qgplsim
         if data.widthExp == 0
             data.widthExp = bandwidth_selection(data)
         end
-		if sum(abs.(data.Z)) < 1  # no Z 
+		if sum(abs.(data.Z)) < 1e-4  # no Z 
             n, q = size(data.Z)
 			gamma, beta = zeros(q), zeros(q)
 		else
@@ -242,7 +242,7 @@ module qgplsim
     end
 
     function bandwidth_selection(m::model)
-        bw = -0.20:0.015:0.10
+        bw = -0.30:0.015:0.10
         nbw = length(bw)
         bw_path = zeros(nbw)
         for j in 1:nbw
