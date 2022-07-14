@@ -224,13 +224,10 @@ module qgplsim
 		end
 		sum_Bz = bz1 + bz2
 		alpha = sum_Bz / norm(sum_Bz) 
-# 		if data.intercept == 1
-# 			alpha_t = alpha[2:end]
-# 			Bz_t = Bz[:, 2:end]
-# 		else
-			alpha_t = alpha
-			Bz_t = Bz
-# 		end
+
+		alpha_t = alpha
+		Bz_t = Bz
+
 		C = Bz_t * alpha_t ./ norm(alpha_t)^2
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta[1,:] / n
