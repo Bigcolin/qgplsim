@@ -1,4 +1,4 @@
-using DataFrames, CSV, DelimitedFiles
+using DataFrames, CSV, DelimitedFiles, Optim
 using Statistics, LinearAlgebra, CategoricalArrays
 using Distributions, Clustering, Random, MLBase
 

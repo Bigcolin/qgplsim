@@ -109,32 +109,25 @@ module qgplsim
 	end
 
 	function x_estimator(data::model, method)
-		X, Z, y, tau = data.X, data.Z, data.y, data.quantileNum
+		X, y, tau = data.X, data.y, data.quantileNum
 		
 		n, p = size(X)
 		categ, index = data.categ, data.index
 		ncateg = index.count
 
-		αz = zeros(ncateg, p)
 		Bz = zeros(n, p)
 		for k in 1:ncateg
 			z = categ[k]
 			indz = index[z]
 			nz = length(indz)
 			az = zeros(nz)
-			# bz = zeros(nz, p)
 			yz = y[indz]
 			Xz = X[indz, :]
 			mean_xz = mean(Xz, dims=1)
 			ht = var(Xz, dims = 1)
-			# ht = xzmax - xzmin
-			# ht = ones(p)
-			# println(ht)
-			# hh = 1
 			h = ones(p) .* nz^(-1 / (p + 6))
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
-               # h[i] = (h[i] > 0.67) * h[i] + (h[i] < 0.67) * 0.67
 
 			end
 
@@ -260,19 +253,11 @@ module qgplsim
         else
             n, q = size(data.Z)
         end
-		n, p = size(data.X)
-# 		if data.intercept == 1
-# 			X = [ones(n, 1) data.X]
-# 		else
-			X = data.X
-# 		end
+
+		X = data.X
 		v = X * data.theta
 		gamma, beta = zeros(q), zeros(q)
-        # max_v = maximum(v)
-        # min_v = minimum(v)
-        # widv =   max_v - min_v    
-        # v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
-    
+
 		y = data.y  - data.X * data.alpha # c1 = 0
 		τ = data.quantileNum
         hp = data.widthExp
@@ -406,44 +391,28 @@ module qgplsim
 
 	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
-		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
 		nz = length(vz)
-		# nv = length(v)
-		# Gz = zeros(nv)
-		# DGz = zeros(nv)
-
 		var_v =  std(vz)
-        mean_v = mean(vz)
+		hi = (nz)^(hp)  * var_v 
+		ind = Vector(1:nz)
+		# popat!(ind, i)
+		vzi = vz[ind] .- v
+		yzi = yz[ind]
+		KerVal = ker.(vzi / hi)/hi
+		vzi = reshape(vzi, nz, 1)
+		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
 
-		h = (nz)^(hp)  * var_v 
-        nstd = 3
-			# for i in 1:nv
-               # if abs(v - mean_v) > nstd*var_v
-                #     hi = exp(abs(v - mean_v) / var_v / nstd^2) * h 
-                # else
-                    hi = h
-                # end
-                ind = Vector(1:nz)
-				# popat!(ind, i)
-				vzi = vz[ind] .- v
-				yzi = yz[ind]
-				KerVal = ker.(vzi / hi)/hi
-                vzi = reshape(vzi, nz, 1)
-                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
+		if d == 1
+			DGz = wi[2]
+		end
+		Gz = wi[1]
 
-                if d == 1
-                    DGz = wi[2]
-                end
-				Gz = wi[1]
-
-			# end
-			if d == 1
-				return DGz
-			else
-				return Gz
-			end
+		if d == 1
+			return DGz
+		else
+			return Gz
+		end
 	end
 
 

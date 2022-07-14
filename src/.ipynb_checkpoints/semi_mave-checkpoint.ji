@@ -1,0 +1,119 @@
+module semiMAVE
+    include("supportFunctions.ji")
+
+    mutable struct model
+        X::Matrix{Float64}
+        Z::Matrix
+        y::Vector
+        n::Int
+        p::Int
+        q::Int
+        zmap::Dict{Any, Vector}
+        gv::Vector
+        dgv::Vector
+        β::Vector{Float64}
+        θ::Vector{Float64}
+
+        function model(df::DataFrame, name_x::Vector{Symbol}, name_z::Vector{Symbol}, name_y::Symbol)
+
+            X = scaler(Array(df[!, name_x]))
+            Z = Array(df[!, name_z])
+            y = Array(df[!, name_y])
+
+            Zb, zmap = categ_binary(Z)
+
+            n, p = size(X)
+            n, q = size(Zb)
+            new(X, Zb, y, n, p, q, zmap)
+        end
+
+        function model(X::Matrix, Z::Array, y::Vector)
+            zmap = Dict()
+            # Z, zmap = categ_binary(Z)
+            n, p = size(X)
+            n, q = size(Z)
+            new(X, Z, y, n, p, q, zmap)
+        end
+    end
+    
+    function predictor(m::model, X::Matrix, Z::Matrix)
+        theta = m.θ
+        beta = m.β
+        v_train = m.X * theta
+        v_test = X * theta
+        n, p = size(X)
+        h = var(v_test)*(n)^(-0.17)
+        gv, dgv = zeros(n), zeros(n)
+        for k in 1:n
+            vij = - (v_train .- v_test[k])
+            vk = hcat(ones(m.n), vij)
+            wk = ker(vij, h)
+            b = pinv(transpose(vk .* wk) * vk)*transpose(vk .* wk) * (m.y - m.Z * beta)
+
+            gv[k], dgv[k] = b[1], b[2]
+        end
+        gv, dgv 
+    
+    end
+
+    function estimator_(m::model, beta, theta)
+        v = m.X*theta
+        h = var(v)*(m.n)^(-0.17)
+
+        gv, dgv = zeros(m.n), zeros(m.n)
+
+        for k in 1:m.n
+
+            vij = v .- sum(m.X[k, :] .* theta)
+            vk = hcat(ones(m.n), vij)
+            wk = ker(vij, h)
+            b = pinv(transpose(vk .* wk) * vk)*transpose(vk .* wk) * (m.y - m.Z * beta)
+
+            gv[k], dgv[k] = b[1], b[2]
+        end
+        gv, dgv
+    end
+
+
+    function estimator__(m::model, gv, dgv)
+
+        h = ones(m.p) .* m.n^(-1 / (m.p + 4))
+        A = zeros(m.p + m.q, m.p + m.q)
+        b = zeros(m.p + m.q)
+        for k in 1:m.n
+
+            yj = m.y .- gv[k]
+            Xij = m.X - m.X[k, :]
+            Wij = ker(Xij, h)
+            X = hcat(m.Z, Xij)  # n x (p + q)
+            wx = transpose(Wij .* X) 
+            A += wx * X
+            b += wx * yj
+        end
+
+        res = pinv(A) * b
+        beta, theta = res[1:m.q], res[(m.q + 1):end]
+        beta, theta
+    end
+
+    function estimator(m::model)
+        n, p = size(m.X)
+        n, q = size(m.Z)
+        _β, β_, _θ, θ_ = rand(q), rand(q), rand(p), rand(p) 
+        Δ = 1.0
+        iter_time = 0
+        gv, dgv = zeros(n), zeros(n)
+        while Δ > 1e-2 && iter_time < 20
+            gv, dgv = estimator_(m, _β, _θ)
+            β_, θ_ = estimator__(m, gv, dgv)
+            Δ = norm(θ_ - _θ) 
+            _β, _θ = β_, θ_
+#             println(_θ)
+            iter_time += 1
+        end
+        m.β, m.θ, m.gv, m.dgv = β_, θ_, gv, dgv
+    end
+
+
+end
+

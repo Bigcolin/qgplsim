@@ -1,7 +1,6 @@
 module plsiqr
     include("supportFunctions.ji")
     include("localLinear_quantReg.ji")
-    using LinearAlgebra, Distributions, Random, Statistics
 
     mutable struct plsiqr_model
 		X::Matrix{Float64}
@@ -15,13 +14,13 @@ module plsiqr
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-		function model(X, Z, y, τ = [0.5], widthExp = -0.17)
+		function plsiqr_model(X, Z, y, τ = [0.5], widthExp = -0.17)
 			categ, index = collection(Z)
 			new(X, Z, y, categ, index, τ, widthExp)
 		end
     
     
-        function model(df::DataFrame, name_x::Vector{Symbol}, name_z::Vector{Symbol}, name_y::Symbol, τ = [0.5], widthExp = -0.17)
+        function plsiqr_model(df::DataFrame, name_x::Vector{Symbol}, name_z::Vector{Symbol}, name_y::Symbol, τ = [0.5], widthExp = -0.17)
 
             X = scaler(Array(df[!, name_x]))
             Z = Array(df[!, name_z])
@@ -34,7 +33,7 @@ module plsiqr
         end
 	end
     
-    function print_model(m::model)
+    function print_model(m::plsiqr_model)
         println("alpha => ", round.(m.alpha, digits = 4))
         println("theta => ", round.(m.theta, digits = 4))
         println("gamma => ", round.(m.gamma, digits = 4))
@@ -43,8 +42,8 @@ module plsiqr
 
     function estimator(model::plsiqr_model, method = "optim_qr")
 
-        theta_0 = init_estimator(model) 
-        alpha_, beta_, theta_ = alt_estimator(model, theta_0, method)
+        alpha_0, theta_0 = init_estimator(model, method) 
+        alpha_, beta_, theta_ = alt_estimator(model, alpha_0, theta_0)
 		model.alpha = alpha_
 		model.beta = beta__
 		model.theta = theta_
@@ -53,9 +52,9 @@ module plsiqr
 
     end
 
-    function init_estimator(model::plsiqr_model)
+    function init_estimator(model::plsiqr_model, method)
 
-        X, Z, y, tau = model.X, model.Z, model.y, model.quantileNum
+        X, y, tau = model.X, model.y, model.quantileNum
         n, p = size(X)
         categ, index = model.categ,  model.index
         ncateg = index.count
@@ -78,26 +77,88 @@ module plsiqr
 			for i in 1:nk 
 				Xzi = Xk[i, :]
 				Xi = Xk - (Xzi)
-				ind = Vector(1:nz)
+				ind = Vector(1:nk)
 				popat!(ind, i)
 				Xi = Xi[ind, :]
 				yzi = yk[ind]
 				KerVal = ker(Xi, h)
                 wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
 
-				dGz[indz[i],:] = wi[2:end]
+				dGz[ind_zk[i],:] = wi[2:end]
 			end
+        end
 
             nij = Int(n * (n - 1) / 2)
+            ∑ = zeros(nij, p)
+            ij = 1
+            for i in 1:n-1
+                for j in (i + 1):n
+                    ∑[ij, :] = dGz[i, :] - dGz[j, :]
+                    ij = ij + 1
+                end
+            end
             
-        
-        end
-        
-        
-    
+            ∑n = ∑' * ∑
+            eigval = eigvals(∑n)
+            ind_eigvec = argmax(eigval)
+            theta = eigvecs(∑n)[:, ind_eigvec]
+            theta = theta / norm(theta)
+            
+            dgz = dGz * theta
+            alpha = sum(dGz - kron(dgz, theta'), dims = 1)
+            alpha = alpha[1,:]/n
+            sg = sign(theta[1])
+            alpha, theta .* sg, dgz .* sg
     end
 
-    function alt_estimator(model::plsiqr_model, theta0, method)
+    function alt_estimator(model::plsiqr_model, alpha0, theta0, dgz)
+
+        X, Z, y, tau = model.X, model.Z, model.y, model.quantileNum
+        r(x) = ρ(x, tau)
+
+        n, q = size(Z)
+        gz,  Beta_ = zeros(n), zeros(n, q)
+
+        categ, index = model.categ,  model.index
+        ncateg = index.count
+
+
+        for k in 1:ncateg
+            zk = categ[k]
+            ind_zk = index[zk]
+            nk = length(ind_zk)
+            vk = X[ind_zk, :] * theta0
+            uk = X[ind_zk, :] * alpha0
+            yk = y[ind_zk]
+            hk = var(vk) * (nk)^model.widthExp
+
+            for i in 1:nk
+                
+                vi = vk .- vk[i]
+                indi = Vector(1:nk)
+                popat!(indi, i)
+                vi = vi[indi]
+                yi = yk[indi]
+                ui = uk[indi]
+                KerVal = ker(vi, hk)
+                dgzi = dgz[ind_zk[i]]
+                tarfunc(w) = sum(KerVal .* r.(yi - ui .- sum(zk .* w[1:q])
+                                       .- w[q + 1] - dgzi*vi))
+                res = Optim.optimize(tarfunc, rand(q + 1), method = BFGS(), f_tol = 1e-2)
+                coef = Optim.minimizer(res)
+                Beta_[ind_zk[i], :] = coef[1:q]
+                gz[ind_zk[i]] = coef[q + 1]
+      
+            
+            end
+      
+        
+        end
+
+        Beta_
+
+
+
     end
 
     function z_estimator(data::plsiqr_model, method)
@@ -110,7 +171,7 @@ module plsiqr
         end
 		n, p = size(data.X)
 
-        ord_gl = 5
+        ord_gl = 11
 		X = data.X
 
 		v = X * data.theta
@@ -162,8 +223,8 @@ module plsiqr
                     _v = [v0]
                 end
                 
-                v_ = minimum(v_) # vk[vk .> v1]
-                _v = maximum(_v) # vk[vk .< v0]
+                v_ = minimum(v_)
+                _v = maximum(_v)
 
                 C0[k] = Gz(_v, vk, yk, 1, τ, hp, method)
                 C1[k] = Gz(v_, vk, yk, 1, τ, hp, method)
@@ -197,21 +258,49 @@ module plsiqr
 			yz = y[categ[1][2]]
 			dg1(u) = Gz(u, vz, yz, 1, τ, hp, method)
 
-			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
+			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1, ord_gl)
             
 			for k in 1:ncateg - 1
 				
 				vk = v[categ[k + 1][2]]
 				yk = y[categ[k + 1][2]]
 				dgk(u) = Gz(u, vk, yk, 1, τ, hp, method)
-                int_gl[k] = glquad(dgk, v0, v1, c0, c1, 11)
+                int_gl[k] = glquad(dgk, v0, v1, c0, c1, ord_gl)
 				ΔdJ[k] = ΔdJ[k] + int_gl[k]
 			end
 			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ ./(c1 - c0)
+            # println(gammai)
        		gamma = gamma + gammai 
+        end
+        gamma / ncateg
 
     end
 
+    function Gz(v, vz, yz, d = 1, tau = [0.5], hp = -0.17, method = "optim")
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+        # tau = [0.5]
+		nz = length(vz)
+		var_v =  std(vz)
+		hi = (nz)^(hp)  * var_v 
+		ind = Vector(1:nz)
+		# popat!(ind, i)
+		vzi = vz[ind] .- v
+		yzi = yz[ind]
+		KerVal = ker.(vzi / hi)/hi
+		vzi = reshape(vzi, nz, 1)
+		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
+
+		if d == 1
+			DGz = wi[2]
+		end
+		Gz = wi[1]
+
+		if d == 1
+			return DGz
+		else
+			return Gz
+		end
+	end
 
 
 end
