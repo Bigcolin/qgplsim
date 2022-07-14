@@ -42,8 +42,8 @@ module plsiqr
 
     function estimator(model::plsiqr_model, method = "optim_qr")
 
-        alpha_0, theta_0 = init_estimator(model, method) 
-        alpha_, beta_, theta_ = alt_estimator(model, alpha_0, theta_0)
+        alpha_0, theta_0, dgz = init_estimator(model, method) 
+        alpha_, beta_, theta_ = alt_estimator(model, alpha_0, theta_0, dgz)
 		model.alpha = alpha_
 		model.beta = beta__
 		model.theta = theta_
@@ -52,13 +52,14 @@ module plsiqr
 
     end
 
-    function init_estimator(model::plsiqr_model, method)
+    function init_estimator(model::plsiqr_model, method = "optim_qr")
 
         X, y, tau = model.X, model.y, model.quantileNum
         n, p = size(X)
         categ, index = model.categ,  model.index
         ncateg = index.count
         
+        Gz = zeros(n)
         dGz = zeros(n, p)
 
         for k in 1:ncateg
@@ -84,6 +85,7 @@ module plsiqr
 				KerVal = ker(Xi, h)
                 wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
 
+                Gz[ind_zk[i]] = wi[1]
 				dGz[ind_zk[i],:] = wi[2:end]
 			end
         end
@@ -111,7 +113,7 @@ module plsiqr
             alpha, theta .* sg, dgz .* sg
     end
 
-    function alt_estimator(model::plsiqr_model, alpha0, theta0, dgz)
+    function alt_estimator(model::plsiqr_model, alpha, theta, dgz)
 
         X, Z, y, tau = model.X, model.Z, model.y, model.quantileNum
         r(x) = ρ(x, tau)
@@ -122,41 +124,76 @@ module plsiqr
         categ, index = model.categ,  model.index
         ncateg = index.count
 
+        function beta_gz(alpha0, theta0, dgz0)
+            for k in 1:ncateg
+                zk = categ[k]
+                ind_zk = index[zk]
+                nk = length(ind_zk)
+                vk = X[ind_zk, :] * theta0
+                uk = X[ind_zk, :] * alpha0
+                yk = y[ind_zk]
+                hk = var(vk) * (nk)^model.widthExp
 
-        for k in 1:ncateg
-            zk = categ[k]
-            ind_zk = index[zk]
-            nk = length(ind_zk)
-            vk = X[ind_zk, :] * theta0
-            uk = X[ind_zk, :] * alpha0
-            yk = y[ind_zk]
-            hk = var(vk) * (nk)^model.widthExp
-
-            for i in 1:nk
+                for i in 1:nk
+                    
+                    vi = vk .- vk[i]
+                    indi = Vector(1:nk)
+                    popat!(indi, i)
+                    vi = vi[indi]
+                    yi = yk[indi]
+                    ui = uk[indi]
+                    KerVal = ker(vi, hk)
+                    dgzi = dgz0[ind_zk[i]]
+                    tarfunc(w) = sum(KerVal .* r.(yi - ui .- sum(zk .* w[1:q])
+                                        .- w[q + 1] - dgzi*vi))
+                    res = Optim.optimize(tarfunc, rand(q + 1), method = BFGS(), f_tol = 1e-2)
+                    coef = Optim.minimizer(res)
+                    Beta_[ind_zk[i], :] = coef[1:q]
+                    gz[ind_zk[i]] = coef[q + 1]
+        
                 
-                vi = vk .- vk[i]
-                indi = Vector(1:nk)
-                popat!(indi, i)
-                vi = vi[indi]
-                yi = yk[indi]
-                ui = uk[indi]
-                KerVal = ker(vi, hk)
-                dgzi = dgz[ind_zk[i]]
-                tarfunc(w) = sum(KerVal .* r.(yi - ui .- sum(zk .* w[1:q])
-                                       .- w[q + 1] - dgzi*vi))
-                res = Optim.optimize(tarfunc, rand(q + 1), method = BFGS(), f_tol = 1e-2)
-                coef = Optim.minimizer(res)
-                Beta_[ind_zk[i], :] = coef[1:q]
-                gz[ind_zk[i]] = coef[q + 1]
-      
+                end
+        
             
             end
-      
-        
+            sum(Beta_, dims = 1)/n, gz
         end
 
-        Beta_
+        function alpha_theta_dgz(beta0, gz0)
+            
+            for k in 1:ncateg
+                zk = categ[k]
+                ind_zk = index[zk]
+                nk = length(ind_zk)
+                vk = X[ind_zk, :] * theta0
+                uk = X[ind_zk, :] * alpha0
+                yk = y[ind_zk]
+                hk = var(vk) * (nk)^model.widthExp
 
+                for i in 1:nk
+                    
+                    vi = vk .- vk[i]
+                    indi = Vector(1:nk)
+                    popat!(indi, i)
+                    vi = vi[indi]
+                    yi = yk[indi]
+                    ui = uk[indi]
+                    KerVal = ker(vi, hk)
+                    dgzi = dgz0[ind_zk[i]]
+                    tarfunc(w) = sum(KerVal .* r.(yi - ui .- sum(zk .* w[1:q])
+                                        .- w[q + 1] - dgzi*vi))
+                    res = Optim.optimize(tarfunc, rand(q + 1), method = BFGS(), f_tol = 1e-2)
+                    coef = Optim.minimizer(res)
+                    Beta_[ind_zk[i], :] = coef[1:q]
+                    gz[ind_zk[i]] = coef[q + 1]
+        
+                
+                end
+        
+            
+            end
+            
+        end
 
 
     end

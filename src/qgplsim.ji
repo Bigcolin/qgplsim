@@ -87,13 +87,8 @@ module qgplsim
 		
 	end
 	function estimator(data::model, method = "mean")
-		theta_,  alpha_ = x_estimator(data, method)
+		data.alpha,  data.theta = x_estimator(data, method)
 
-		alpha = alpha_ # s./ alpha_[1]
-		theta = theta_
-        
-		data.alpha = alpha
-		data.theta = theta
         if data.widthExp == 0
             data.widthExp = bandwidth_selection(data)
         end
@@ -105,10 +100,71 @@ module qgplsim
 		end
 		data.beta = beta
 		data.gamma = gamma
-		return theta, gamma, alpha, beta
+		return data.theta, gamma, data.alpha, beta
 	end
 
-	function x_estimator(data::model, method)
+	function x_estimator(mode::model, method = "optim_qr")
+
+        X, y, tau = mode.X, mode.y, mode.quantileNum
+        n, p = size(X)
+        categ, index = mode.categ,  mode.index
+        ncateg = index.count
+        
+        Gz = zeros(n)
+        dGz = zeros(n, p)
+
+        for k in 1:ncateg
+            zk = categ[k]
+            ind_zk = index[zk]
+            nk = length(ind_zk)
+            yk = y[ind_zk]
+            Xk = X[ind_zk, :]
+
+            ht = var(Xk, dims = 1)
+			h = ones(p) .* nk^(-1 / (p + 6))
+			for i in 1:p
+				h[i] = h[i] * ht[i] 
+			end
+
+			for i in 1:nk 
+				Xzi = Xk[i, :]
+				Xi = Xk - (Xzi)
+				ind = Vector(1:nk)
+				popat!(ind, i)
+				Xi = Xi[ind, :]
+				yzi = yk[ind]
+				KerVal = ker(Xi, h)
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
+
+                Gz[ind_zk[i]] = wi[1]
+				dGz[ind_zk[i],:] = wi[2:end]
+			end
+        end
+
+            nij = Int(n * (n - 1) / 2)
+            ∑ = zeros(nij, p)
+            ij = 1
+            for i in 1:n-1
+                for j in (i + 1):n
+                    ∑[ij, :] = dGz[i, :] - dGz[j, :]
+                    ij = ij + 1
+                end
+            end
+            
+            ∑n = ∑' * ∑
+            eigval = eigvals(∑n)
+            ind_eigvec = argmax(eigval)
+            theta = eigvecs(∑n)[:, ind_eigvec]
+            theta = theta / norm(theta)
+            
+            dgz = dGz * theta
+            alpha = sum(dGz - kron(dgz, theta'), dims = 1)
+            alpha = alpha[1,:]/n
+            sg = sign(theta[1])
+            alpha, theta .* sg
+    end
+
+	function x_estimator_bak(data::model, method)
 		X, y, tau = data.X, data.y, data.quantileNum
 		
 		n, p = size(X)
@@ -125,7 +181,7 @@ module qgplsim
 			Xz = X[indz, :]
 			mean_xz = mean(Xz, dims=1)
 			ht = var(Xz, dims = 1)
-			h = ones(p) .* nz^(-1 / (p + 6))
+			h = ones(p) .* nz^(-1 / (p + 4))
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
 
@@ -159,6 +215,7 @@ module qgplsim
 		Rbz = kmeans(bz |> transpose, 2)
        	bz1 = Rbz.centers[:, 1]
         bz2 = Rbz.centers[:, 2]
+		println(bz1, "\n", bz2)
             
 		if bz1[1] > 0
 			bz2 = -bz2
