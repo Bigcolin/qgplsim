@@ -87,13 +87,8 @@ module qgplsim
 		
 	end
 	function estimator(data::model, method = "mean")
-		theta_,  alpha_ = x_estimator(data, method)
+		data.alpha,  data.theta = x_estimator(data, method)
 
-		alpha = alpha_ # s./ alpha_[1]
-		theta = theta_
-        
-		data.alpha = alpha
-		data.theta = theta
         if data.widthExp == 0
             data.widthExp = bandwidth_selection(data)
         end
@@ -105,36 +100,91 @@ module qgplsim
 		end
 		data.beta = beta
 		data.gamma = gamma
-		return theta, gamma, alpha, beta
+		return data.theta, gamma, data.alpha, beta
 	end
 
-	function x_estimator(data::model, method)
-		X, Z, y, tau = data.X, data.Z, data.y, data.quantileNum
+	function x_estimator(mode::model, method = "optim_qr")
+
+        X, y, tau = mode.X, mode.y, mode.quantileNum
+        n, p = size(X)
+        categ, index = mode.categ,  mode.index
+        ncateg = index.count
+        
+        Gz = zeros(n)
+        dGz = zeros(n, p)
+
+        for k in 1:ncateg
+            zk = categ[k]
+            ind_zk = index[zk]
+            nk = length(ind_zk)
+            yk = y[ind_zk]
+            Xk = X[ind_zk, :]
+
+            ht = mean(var(Xk, dims = 1))
+			h = ones(p) .* nk^(-1/(2p + 10))
+            h = h .* ht
+			# for i in 1:p
+			#    h[i] = h[i] * ht[i] 
+			# end
+
+			for i in 1:nk 
+				Xzi = Xk[i, :]
+				Xi = Xk - (Xzi)
+				ind = Vector(1:nk)
+				popat!(ind, i)
+				Xi = Xi[ind, :]
+				yzi = yk[ind]
+				KerVal = ker(Xi, h)
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
+
+                Gz[ind_zk[i]] = wi[1]
+				dGz[ind_zk[i],:] = wi[2:end]
+			end
+        end
+
+            nij = Int(n * (n - 1) / 2)
+            ∑ = zeros(nij, p)
+            ij = 1
+            for i in 1:n-1
+                for j in (i + 1):n
+                    ∑[ij, :] = dGz[i, :] - dGz[j, :]
+                    ij = ij + 1
+                end
+            end
+            
+            ∑n = ∑' * ∑
+            eigval = eigvals(∑n)
+            ind_eigvec = argmax(eigval)
+            theta = eigvecs(∑n)[:, ind_eigvec]
+            theta = theta / norm(theta)
+            
+            dgz = dGz * theta
+            alpha = sum(dGz - kron(dgz, theta'), dims = 1)
+            alpha = alpha[1,:]/n
+            sg = sign(theta[1])
+            alpha, theta .* sg
+    end
+
+	function x_estimator_bak(data::model, method)
+		X, y, tau = data.X, data.y, data.quantileNum
 		
 		n, p = size(X)
 		categ, index = data.categ, data.index
 		ncateg = index.count
 
-		αz = zeros(ncateg, p)
 		Bz = zeros(n, p)
 		for k in 1:ncateg
 			z = categ[k]
 			indz = index[z]
 			nz = length(indz)
 			az = zeros(nz)
-			# bz = zeros(nz, p)
 			yz = y[indz]
 			Xz = X[indz, :]
 			mean_xz = mean(Xz, dims=1)
 			ht = var(Xz, dims = 1)
-			# ht = xzmax - xzmin
-			# ht = ones(p)
-			# println(ht)
-			# hh = 1
-			h = ones(p) .* nz^(-1 / (p + 6))
+			h = ones(p) .* nz^(-0.1)
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
-               # h[i] = (h[i] > 0.67) * h[i] + (h[i] < 0.67) * 0.67
 
 			end
 
@@ -174,18 +224,15 @@ module qgplsim
 		end
 		sum_Bz = bz1 + bz2
 		alpha = sum_Bz / norm(sum_Bz) 
-# 		if data.intercept == 1
-# 			alpha_t = alpha[2:end]
-# 			Bz_t = Bz[:, 2:end]
-# 		else
-			alpha_t = alpha
-			Bz_t = Bz
-# 		end
+
+		alpha_t = alpha
+		Bz_t = Bz
+
 		C = Bz_t * alpha_t ./ norm(alpha_t)^2
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta[1,:] / n
         sg = sign(alpha[1])
-		alpha .* sg, theta .* sg # Cz
+		theta .* sg, alpha .* sg, bz1, bz2 # Cz
 
 	end
 
@@ -253,26 +300,18 @@ module qgplsim
     end
 
 	function z_estimator(data::model, method)
-
+        method = "optim_qr"
         if typeof(data.Z) <: Vector
             n = length(data.Z)
             q = 1
         else
             n, q = size(data.Z)
         end
-		n, p = size(data.X)
-# 		if data.intercept == 1
-# 			X = [ones(n, 1) data.X]
-# 		else
-			X = data.X
-# 		end
+
+		X = data.X
 		v = X * data.theta
 		gamma, beta = zeros(q), zeros(q)
-        # max_v = maximum(v)
-        # min_v = minimum(v)
-        # widv =   max_v - min_v    
-        # v = ((v .- min_v) / widv .- 0.5) * 4  # v in [-2, 2]
-    
+
 		y = data.y  - data.X * data.alpha # c1 = 0
 		τ = data.quantileNum
         hp = data.widthExp
@@ -382,7 +421,7 @@ module qgplsim
 			
 			vz = v[categ[1][2]]
 			yz = y[categ[1][2]]
-			g1(u) = Gz(u, vz, yz, 0, τ, hp, method)
+			g1(u) = Gz(u, vz, yz, 0, τ, hp)
 			d1 =  sum(z1 .* gammai)
 			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
 
@@ -390,7 +429,7 @@ module qgplsim
 				zk = categ[k][1]
 				vk = v[categ[k + 1][2]]
 				yk = y[categ[k + 1][2]]
-				gk(u) = Gz(u, vk , yk, 0, τ, hp, method)
+				gk(u) = Gz(u, vk , yk, 0, τ, hp)
 				dk = sum(zk .* gammai)
 				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
 
@@ -404,51 +443,35 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim")
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim_qr")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
-		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 
 		nz = length(vz)
-		# nv = length(v)
-		# Gz = zeros(nv)
-		# DGz = zeros(nv)
-
 		var_v =  std(vz)
-        mean_v = mean(vz)
+		hi = (nz)^(hp)  * var_v 
+		ind = Vector(1:nz)
+		# popat!(ind, i)
+		vzi = vz[ind] .- v
+		yzi = yz[ind]
+		KerVal = ker.(vzi / hi)/hi
+		vzi = reshape(vzi, nz, 1)
+		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
 
-		h = (nz)^(hp)  * var_v 
-        nstd = 3
-			# for i in 1:nv
-               # if abs(v - mean_v) > nstd*var_v
-                #     hi = exp(abs(v - mean_v) / var_v / nstd^2) * h 
-                # else
-                    hi = h
-                # end
-                ind = Vector(1:nz)
-				# popat!(ind, i)
-				vzi = vz[ind] .- v
-				yzi = yz[ind]
-				KerVal = ker.(vzi / hi)/hi
-                vzi = reshape(vzi, nz, 1)
-                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
+		if d == 1
+			DGz = wi[2]
+		end
+		Gz = wi[1]
 
-                if d == 1
-                    DGz = wi[2]
-                end
-				Gz = wi[1]
-
-			# end
-			if d == 1
-				return DGz
-			else
-				return Gz
-			end
+		if d == 1
+			return DGz
+		else
+			return Gz
+		end
 	end
 
 
 
-	function adaptive_Gz(v, vz, yz, tau = 0.5, hp = -0.17, method = "optim")
+	function vec_Gz(v, vz, yz, tau = 0.5, hp = -0.17, method = "optim")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 		# for v, return gz = g.(v) and dgz = ∇g.(v) 
 

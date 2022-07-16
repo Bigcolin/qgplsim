@@ -15,7 +15,13 @@ function Base.:-(X::Matrix, xi::Vector)
     _Xi = X - Xi
     _Xi
 end
-    
+
+function euclid(Alpha, alpha)
+        n, p = size(Alpha)
+        norm_Alpha = norm.([Alpha[k, :] - alpha for k in 1:n]) ./ norm(alpha)
+        mean(norm_Alpha), std(norm_Alpha)
+end
+
 distribution_ker = Normal(0, 1)
     
 function epker(x)

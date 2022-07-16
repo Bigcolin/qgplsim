@@ -120,11 +120,12 @@ module qgplsim
             yk = y[ind_zk]
             Xk = X[ind_zk, :]
 
-            ht = var(Xk, dims = 1)
-			h = ones(p) .* nk^(-1 / (p + 6))
-			for i in 1:p
-				h[i] = h[i] * ht[i] 
-			end
+            ht = mean(var(Xk, dims = 1))
+			h = ones(p) .* nk^(-1/(2p + 10))
+            h = h .* ht
+			# for i in 1:p
+			#    h[i] = h[i] * ht[i] 
+			# end
 
 			for i in 1:nk 
 				Xzi = Xk[i, :]
@@ -181,7 +182,7 @@ module qgplsim
 			Xz = X[indz, :]
 			mean_xz = mean(Xz, dims=1)
 			ht = var(Xz, dims = 1)
-			h = ones(p) .* nz^(-1 / (p + 4))
+			h = ones(p) .* nz^(-0.1)
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
 
@@ -215,7 +216,6 @@ module qgplsim
 		Rbz = kmeans(bz |> transpose, 2)
        	bz1 = Rbz.centers[:, 1]
         bz2 = Rbz.centers[:, 2]
-		println(bz1, "\n", bz2)
             
 		if bz1[1] > 0
 			bz2 = -bz2
@@ -232,7 +232,7 @@ module qgplsim
 		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
 		theta = theta[1,:] / n
         sg = sign(alpha[1])
-		alpha .* sg, theta .* sg # Cz
+		theta .* sg, alpha .* sg, bz1, bz2 # Cz
 
 	end
 
@@ -300,7 +300,7 @@ module qgplsim
     end
 
 	function z_estimator(data::model, method)
-
+        method = "optim_qr"
         if typeof(data.Z) <: Vector
             n = length(data.Z)
             q = 1
@@ -421,7 +421,7 @@ module qgplsim
 			
 			vz = v[categ[1][2]]
 			yz = y[categ[1][2]]
-			g1(u) = Gz(u, vz, yz, 0, τ, hp, method)
+			g1(u) = Gz(u, vz, yz, 0, τ, hp)
 			d1 =  sum(z1 .* gammai)
 			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
 
@@ -429,7 +429,7 @@ module qgplsim
 				zk = categ[k][1]
 				vk = v[categ[k + 1][2]]
 				yk = y[categ[k + 1][2]]
-				gk(u) = Gz(u, vk , yk, 0, τ, hp, method)
+				gk(u) = Gz(u, vk , yk, 0, τ, hp)
 				dk = sum(zk .* gammai)
 				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
 
@@ -443,7 +443,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim")
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim_qr")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 
 		nz = length(vz)
