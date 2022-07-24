@@ -110,7 +110,7 @@ module qgplsim
         categ, index = mode.categ,  mode.index
         ncateg = index.count
         
-        Gz = zeros(n)
+        # Gz = zeros(n)
         dGz = zeros(n, p)
 
         for k in 1:ncateg
@@ -135,10 +135,11 @@ module qgplsim
 				Xi = Xi[ind, :]
 				yzi = yk[ind]
 				KerVal = ker(Xi, h)
-                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
+				Xi = [ones(nk - 1) Xi]
+                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, method)
 
-                Gz[ind_zk[i]] = wi[1]
-				dGz[ind_zk[i],:] = wi[2:end]
+                # Gz[ind_zk[i]] = wi[1]
+				dGz[ind_zk[i],:] = wi[3:end]
 			end
         end
 
@@ -443,7 +444,7 @@ module qgplsim
 	end
 
 
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "optim_qr")
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "gurobi")
 		# Estimate Q(y, Z = zk) = g(v + Zk γ)
 
 		nz = length(vz)
@@ -454,19 +455,17 @@ module qgplsim
 		vzi = vz[ind] .- v
 		yzi = yz[ind]
 		KerVal = ker.(vzi / hi)/hi
-		vzi = reshape(vzi, nz, 1)
-		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, d, method)
+    
+        if d > 0
+            vzi = [ones(nz) vzi]
+        else
+            vzi = ones(nz, 1)
+        end
+    
+    
+		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, method)
+		res = wi[d + 2]
 
-		if d == 1
-			DGz = wi[2]
-		end
-		Gz = wi[1]
-
-		if d == 1
-			return DGz
-		else
-			return Gz
-		end
 	end
 
 
