@@ -19,9 +19,14 @@ module qgplsim
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
+        init
 		function model(X, Z, y, τ = [0.5], widthExp = -0.17)
 			categ, index = collection(Z)
-			new(X, Z, y, categ, index, τ, widthExp)
+            n, p = size(X)
+            n, q = size(Z)
+            alpha, theta = zeros(p), zeros(p)
+            beta, gamma = zeros(q), zeros(q)
+			new(X, Z, y, categ, index, τ, widthExp, alpha, gamma, theta, beta, false)
 		end
     
     
@@ -33,7 +38,9 @@ module qgplsim
 
             Zb, zmap = categ_binary(Z)
             categ, index = collection(Zb)
-			new(X, Zb, y, categ, index, τ, widthExp)
+            alpha, theta = zeros(p), zeros(p)
+            beta, gamma = zeros(q), zeros(q)
+			new(X, Zb, y, categ, index, τ, widthExp, alpha, gamma, theta, beta)
         
         end
 	end
@@ -63,14 +70,14 @@ module qgplsim
 		
 	end
 
-	function predict(m::model, x::Matrix, z::Matrix, dv = 0, method = "optim")
+	function predict(m::model, x::Matrix, z::Matrix, dv = 0, method = "qr")
 
 		v = x * m.theta + z * m.gamma 
   		vm = m.X * m.theta + m.Z * m.gamma  
 		ym = m.y - m.X * m.alpha - m.Z * m.beta
 		n,p = size(x)
 		res = zeros(n)
-        res = adaptive_Gz(v, vm, ym, m.quantileNum, m.widthExp, method)
+        res = vec_Gz(v, vm, ym, dv, m.quantileNum,  m.widthExp, method)
 		# categ, index = collection(z)
 # 		for k in 1:n
 # 			zk = z[k,:]
@@ -86,24 +93,23 @@ module qgplsim
 		res
 		
 	end
-	function estimator(data::model, method = "mean")
-		data.alpha,  data.theta = x_estimator(data, method)
+	function estimator(data::model, method = "qr")
+		x_estimator(data, method)
 
         if data.widthExp == 0
             data.widthExp = bandwidth_selection(data)
         end
 		if sum(abs.(data.Z)) < 1e-4  # no Z 
             n, q = size(data.Z)
-			gamma, beta = zeros(q), zeros(q)
+			data.gamma, data,beta = zeros(q), zeros(q)
 		else
-			gamma, beta = z_estimator(data, method)
+			z_estimator(data, method)
 		end
-		data.beta = beta
-		data.gamma = gamma
-		return data.theta, gamma, data.alpha, beta
+        data.init = true
+        # print_model(data)
 	end
 
-	function x_estimator(mode::model, method = "optim_qr")
+	function x_estimator(mode::model, method)
 
         X, y, tau = mode.X, mode.y, mode.quantileNum
         n, p = size(X)
@@ -163,7 +169,250 @@ module qgplsim
             alpha = sum(dGz - kron(dgz, theta'), dims = 1)
             alpha = alpha[1,:]/n
             sg = sign(theta[1])
-            alpha, theta .* sg
+            mode.alpha, mode.theta = alpha, theta .* sg
+    end
+
+
+
+	function z_estimator(data::model, method)
+        if typeof(data.Z) <: Vector
+            n = length(data.Z)
+            q = 1
+        else
+            n, q = size(data.Z)
+        end
+
+        dz = 1
+		gamma, beta = zeros(q), []
+		X = data.X
+		v = X * data.theta
+		y = data.y  - data.X * data.alpha  # - data.Z * data.beta # c1 = 0
+		τ = data.quantileNum
+        hp = data.widthExp
+		index = deepcopy(data.index)
+		categ = collect(index)
+		ncateg = index.count
+		vv0, vv1 = -1e5, 1e5
+		v0, v1 = -1e5, 1e5
+		c0, c1 = 1, -1
+        hz = zeros(ncateg)
+			C0 = zeros(ncateg)
+			C1 = zeros(ncateg)
+			for k in 1:ncateg
+				vk = v[categ[k][2]]
+				min_vk = minimum(vk)
+				max_vk = maximum(vk)
+				hz[k] = (length(vk))^(hp) * std(vk)    # * (max_vk - min_vk)/2
+				vmin = min_vk 
+				vmax = max_vk 
+				if vv0 < vmin
+					vv0 = vmin
+				end
+
+				if vv1 > vmax
+					vv1 = vmax
+				end
+			end
+                tail = mean(hz)
+                # println((vv1 - vv0)/tail)
+                v0 = vv0 + 2.0 * tail
+                v1 = vv1 - 2.0 * tail
+
+				for k in 1:ncateg
+					vk = v[categ[k][2]]
+					yk = y[categ[k][2]]
+
+					v_ = vk[vk .> v1]
+					if v_ == []
+						v_ = [v1]
+					end
+					_v = vk[vk .< v0]
+					if _v == []
+						_v = [v0]
+					end
+					
+					v_ = minimum(v_) # vk[vk .> v1]
+					_v = maximum(_v) # vk[vk .< v0]
+
+					C0[k] = Gz(_v, vk, yk, dz, τ, hp, method)
+					C1[k] = Gz(v_, vk, yk, dz, τ, hp, method)
+				end
+			
+				c0 = maximum(C0)
+				c1 = minimum(C1)
+
+
+
+		for i in 1:ncateg
+			ΔdJ = zeros(ncateg - 1)
+            C0i, C1i = max.(C0, C0[i]), min.(C1, C1[i])
+            popat!(C0i, i)
+            popat!(C1i, i)
+			ΔZ = transpose(hcat(keys(index)...))
+			categ = collect(index)
+			ΔZ = ΔZ[1:end, :] - ΔZ[i, :]
+			tdz = ΔZ[i, :]
+			ΔZ[i, :] = ΔZ[1, :]
+			ΔZ = ΔZ[2:end, :]
+			zi = categ[i, :]
+			categ[i, :] = categ[1, :]
+			categ[1, :] = zi
+			z1 = categ[1][1]
+        
+			vz = v[categ[1][2]]
+			yz = y[categ[1][2]]
+			dg1(u) = Gz(u, vz, yz, dz, τ, hp, method)
+            for k in 1:ncateg - 1
+                ΔdJ[k] = ΔdJ[k] .- glquad(dg1, v0, v1, C0i[k], C1i[k])
+            end
+            # println(ΔdJ)
+            
+			for k in 1:ncateg - 1
+				
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+				dgk(u) = Gz(u, vk, yk, dz, τ, hp, method)
+				ΔdJ[k] = ΔdJ[k] + glquad(dgk, v0, v1, C0i[k], C1i[k])
+				ΔdJ[k] = ΔdJ[k] ./ (C1i[k] - C0i[k])
+            
+			end
+			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ #./(c1 - c0)
+            # println(i, ": ", gammai)
+      		gamma = gamma + gammai 
+            
+			# estimation for β    
+			d1 =  sum(z1 .* gammai)
+            p1 = Vector(LinRange(v0, v1, 10))
+			yp1 = vec_Gz(p1, vz, yz, 0, τ, hp)
+			ΔJ = zeros(ncateg - 1)
+        
+            for k in 1:ncateg - 1
+				zk = categ[k][1]
+				vk = v[categ[k + 1][2]]
+				yk = y[categ[k + 1][2]]
+                dk =  sum(zk .* gammai)
+                pk = Vector(LinRange(v0 + d1 - dk, v1 + d1 - dk, 10))
+                ypk = vec_Gz(pk, vk, yk, 0, τ, hp)
+                ΔJ[k] = mean(yp1 - ypk)               
+           
+            end
+			
+# 			g1(u) = Gz(u, vz, yz, 0, τ, hp)
+
+# 			for k in 1:ncateg - 1
+# 				zk = categ[k][1]
+# 				vk = v[categ[k + 1][2]]
+# 				yk = y[categ[k + 1][2]]
+# 				gk(u) = Gz(u, vk, yk, 0, τ, hp)
+# 				dk = sum(zk .* gammai)
+# 				ΔJ[k] = glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5) - 
+#                         glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
+
+# 			end
+
+			ΔZ = - ΔZ
+			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ # /abs(v1 - v0)
+            # println(betai)
+			push!(beta, betai)
+		end
+    
+		data.gamma, data.beta = gamma/ncateg, mean(beta) # .- 0.5
+	end
+
+
+	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "gurobi")
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+
+		nz = length(vz)
+		var_v =  std(vz)
+		hi = (nz)^(hp)  * var_v 
+		ind = Vector(1:nz)
+		# popat!(ind, i)
+		vzi = vz[ind] .- v
+		yzi = yz[ind]
+		KerVal = ker.(vzi / hi)/hi
+        vzi = reshape(vzi, nz, 1)
+        # if d > 0
+            vzi = [ones(nz) vzi]
+        # else
+            # vzi = ones(nz, 1)
+        # end
+    
+    
+		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, method)
+		res = wi[d + 2]
+
+	end
+
+
+
+	function vec_Gz(v, vz, yz, d = 1, tau = 0.5,  hp = -0.17, method = "qr")
+		# Estimate Q(y, Z = zk) = g(v + Zk γ)
+		# for v, return gz = g.(v) and dgz = ∇g.(v) 
+
+		nz = length(vz)
+		nv = length(v)
+		Gz = zeros(nv)
+        # max_v = maximum(vz)
+        # min_v = minimum(vz)
+        # widv =   max_v - min_v    
+        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
+        # v = ((v .- min_v) / widv .- 0.5) * 5
+		std_v =  std(vz)
+        mean_v = mean(vz)
+
+		h = (nz)^(hp) * std_v 
+        # h = (h > 0.17) * h + (h < 0.17) * 0.17
+		KerVal = zeros(nz, nv)
+			for i in 1:nv
+                vzi = vz .- v[i]
+				KerVal = ker.(vzi / h)/h
+                vzi = [ones(nz) vzi]
+                wi = localLinear_quantReg.solver(yz, vzi, KerVal, tau, method)
+
+				Gz[i] = wi[d + 2]
+
+			end
+
+		Gz
+	end
+
+    function bandwidth_cv1(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
+        v = m.X * m.theta
+		y = m.y - m.X * m.alpha
+        ncateg = m.index.count
+		n,p = size(m.X)
+		res = zeros(n)
+		# categ, index = collection(z)
+		for k in 1:ncateg
+            indk = m.index[m.categ[k]] 
+            vz = v[indk]
+            yz = y[indk]
+            nz = length(vz)
+            for j in 1:nz
+                indz = Vector(1:nz)
+                popat!(indz, j)
+                indj = indk[j]
+            
+                vz_j = vz[indz]
+                yz_j = yz[indz]
+                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
+            end
+        end
+        bias = rho.(y .- res, m.quantileNum) |> sum 
+        bias = bias / (2n)
+    end
+
+
+    function bandwidth_selection(m::model)
+        bw = -0.30:0.015:0.10
+        nbw = length(bw)
+        bw_path = zeros(nbw)
+        for j in 1:nbw
+            bw_path[j] = qgplsim.bandwidth_cv1(m, bw[j])
+        end
+        ind = argmin(bw_path)
+        bandwidth_exp = bw[ind]
     end
 
 	function x_estimator_bak(data::model, method)
@@ -236,278 +485,4 @@ module qgplsim
 		theta .* sg, alpha .* sg, bz1, bz2 # Cz
 
 	end
-
-    function bandwidth_cv1(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
-        v = m.X * m.theta
-		y = m.y - m.X * m.alpha
-        ncateg = m.index.count
-		n,p = size(m.X)
-		res = zeros(n)
-		# categ, index = collection(z)
-		for k in 1:ncateg
-            indk = m.index[m.categ[k]] 
-            vz = v[indk]
-            yz = y[indk]
-            nz = length(vz)
-            for j in 1:nz
-                indz = Vector(1:nz)
-                popat!(indz, j)
-                indj = indk[j]
-            
-                vz_j = vz[indz]
-                yz_j = yz[indz]
-                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
-            end
-        end
-        bias = rho.(y .- res, m.quantileNum) |> sum 
-        bias = bias / (2n)
-    end
-
-    function bandwidth_cv2(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
-        v = m.X * m.theta
-		y = m.y - m.X * m.alpha - m.Z * m.beta
-        ncateg = m.index.count
-		n,p = size(m.X)
-		res = zeros(n)
-		# categ, index = collection(z)
-		for k in 1:ncateg
-            indk = m.index[m.categ[k]] 
-            vz = v[indk]
-            yz = y[indk]
-            nz = length(vz)
-            for j in 1:nz
-                indz = Vector(1:nz)
-                popat!(indz, j)
-                indj = indk[j]
-            
-                vz_j = vz[indz]
-                yz_j = yz[indz]
-                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
-            end
-        end
-        bias = rho.(y .- res, m.quantileNum) |> sum 
-        bias = bias / (2n)
-    end
-
-    function bandwidth_selection(m::model)
-        bw = -0.30:0.015:0.10
-        nbw = length(bw)
-        bw_path = zeros(nbw)
-        for j in 1:nbw
-            bw_path[j] = qgplsim.bandwidth_cv1(m, bw[j])
-        end
-        ind = argmin(bw_path)
-        bandwidth_exp = bw[ind]
-    end
-
-	function z_estimator(data::model, method)
-        method = "optim_qr"
-        if typeof(data.Z) <: Vector
-            n = length(data.Z)
-            q = 1
-        else
-            n, q = size(data.Z)
-        end
-
-		X = data.X
-		v = X * data.theta
-		gamma, beta = zeros(q), zeros(q)
-
-		y = data.y  - data.X * data.alpha # c1 = 0
-		τ = data.quantileNum
-        hp = data.widthExp
-		index = deepcopy(data.index)
-		categ = collect(index)
-		ncateg = index.count
-		vv0, vv1 = -1e5, 1e5
-		v0, v1 = -1e5, 1e5
-		c0, c1 = 1, -1
-        
-			C0 = zeros(ncateg)
-			C1 = zeros(ncateg)
-			for k in 1:ncateg
-				vk = v[categ[k][2]]
-				min_vk = minimum(vk)
-				max_vk = maximum(vk)
-				h = (length(vk))^(hp) * std(vk)    # * (max_vk - min_vk)/2
-				tail = h # (max_vk - min_vk)/10
-				vmin = min_vk + 2 * tail
-				vmax = max_vk - 2 * tail
-				if vv0 < vmin
-					vv0 = vmin
-				end
-
-				if vv1 > vmax
-					vv1 = vmax
-				end
-			end
-			v0, v1 = vv0, vv1
-			nstep = 0
-			step = (v1 - v0)/40
-
-			while nstep < 5 && c0 > c1 # expand v0, v1, 20  times to find c0 < c1
-				for k in 1:ncateg
-					vk = v[categ[k][2]]
-					yk = y[categ[k][2]]
-
-					v_ = vk[vk .> v1]
-					if v_ == []
-						v_ = [v1]
-					end
-					_v = vk[vk .< v0]
-					if _v == []
-						_v = [v0]
-					end
-					
-					v_ = minimum(v_) # vk[vk .> v1]
-					_v = maximum(_v) # vk[vk .< v0]
-
-					C0[k] = Gz(_v, vk, yk, 1, τ, hp, method)
-					C1[k] = Gz(v_, vk, yk, 1, τ, hp, method)
-				end
-			
-				c0 = maximum(C0)
-				c1 = minimum(C1)
-
-
-				if c0 > c1 
-		 			v0 = v0 - step
-		 			v1 = v1 + step
-                    nstep = nstep + 1
-		 		end
-		 	end
-            # C1 = C1[C1 .> C0]
-            # c1 = minimum(C1)
-
-		for i in 1:ncateg
-			ΔdJ = zeros(ncateg - 1)
-            int_gl = zeros(ncateg - 1)
-			ΔZ = transpose(hcat(keys(index)...))
-			categ = collect(index)
-			ΔZ = ΔZ[1:end, :] - ΔZ[i, :]
-			tdz = ΔZ[i, :]
-			ΔZ[i, :] = ΔZ[1, :]
-			ΔZ = ΔZ[2:end, :]
-			# println(ΔZ)
-            
-			tdc = categ[i, :]
-			categ[i, :] = categ[1, :]
-			categ[1, :] = tdc
-			# ord_gl = 5
-			vz = v[categ[1][2]]
-			yz = y[categ[1][2]]
-			dg1(u) = Gz(u, vz, yz, 1, τ, hp, method)
-
-			ΔdJ = ΔdJ .- glquad(dg1, v0, v1, c0, c1)
-            # println(ΔdJ)
-            
-			for k in 1:ncateg - 1
-				
-				vk = v[categ[k + 1][2]]
-				yk = y[categ[k + 1][2]]
-				dgk(u) = Gz(u, vk, yk, 1, τ, hp, method)
-                int_gl[k] = glquad(dgk, v0, v1, c0, c1, 11)
-				ΔdJ[k] = ΔdJ[k] + int_gl[k]
-			end
-            # println(ΔdJ)
-            # println(int_gl)
-			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ ./(c1 - c0)
-            # println(i, ": ", gammai)
-      		gamma = gamma + gammai 
-
-			# estimation for β
-            
-			z1 = categ[1][1]
-			ΔJ = zeros(ncateg - 1)
-			
-			vz = v[categ[1][2]]
-			yz = y[categ[1][2]]
-			g1(u) = Gz(u, vz, yz, 0, τ, hp)
-			d1 =  sum(z1 .* gammai)
-			ΔJ = ΔJ .+ glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5)
-
-			for k in 1:ncateg - 1
-				zk = categ[k][1]
-				vk = v[categ[k + 1][2]]
-				yk = y[categ[k + 1][2]]
-				gk(u) = Gz(u, vk , yk, 0, τ, hp)
-				dk = sum(zk .* gammai)
-				ΔJ[k] = ΔJ[k] - glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
-
-			end
-
-			ΔZ = - ΔZ
-			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ /abs(v1 - v0)
-			beta = beta + betai
-		end
-		gamma/ncateg, beta/ncateg
-	end
-
-
-	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "gurobi")
-		# Estimate Q(y, Z = zk) = g(v + Zk γ)
-
-		nz = length(vz)
-		var_v =  std(vz)
-		hi = (nz)^(hp)  * var_v 
-		ind = Vector(1:nz)
-		# popat!(ind, i)
-		vzi = vz[ind] .- v
-		yzi = yz[ind]
-		KerVal = ker.(vzi / hi)/hi
-    
-        if d > 0
-            vzi = [ones(nz) vzi]
-        else
-            vzi = ones(nz, 1)
-        end
-    
-    
-		wi = localLinear_quantReg.solver(yzi, vzi, KerVal, tau, method)
-		res = wi[d + 2]
-
-	end
-
-
-
-	function vec_Gz(v, vz, yz, tau = 0.5, hp = -0.17, method = "optim")
-		# Estimate Q(y, Z = zk) = g(v + Zk γ)
-		# for v, return gz = g.(v) and dgz = ∇g.(v) 
-
-		nz = length(vz)
-		nv = length(v)
-		Gz = zeros(nv)
-        # max_v = maximum(vz)
-        # min_v = minimum(vz)
-        # widv =   max_v - min_v    
-        # vz = ((vz .- min_v) / widv .- 0.5) * 5 
-        # v = ((v .- min_v) / widv .- 0.5) * 5
-		std_v =  std(vz)
-        mean_v = mean(vz)
-
-		h = (nz)^(hp) * std_v 
-        # h = (h > 0.17) * h + (h < 0.17) * 0.17
-		KerVal = zeros(nz, nv)
-        nstd = 3.0
-			for i in 1:nv
-                if abs(v[i] - mean_v) > nstd*std_v
-                    hi = exp(abs(v[i] - mean_v) / std_v / nstd^2) * h 
-                    d = 0
-                else
-                    hi = h
-                    d = 1
-                end
-                
-				KerVal = ker.((vz .- v[i]) / hi)/hi
-                vi = reshape(vz .- v[i], nz, 1)
-                # wi = localLinear_quantReg.npqr_fit(yz, vi, KerVal[:,i], tau)
-                wi = localLinear_quantReg.solver(yz, vi, KerVal, tau, d, method)
-
-				Gz[i] = wi[1]
-
-			end
-
-		Gz
-	end
-
 end # module

@@ -1,75 +1,97 @@
-using Distributions, Statistics, DelimitedFiles
+using Distributions, Statistics
 
-function discret_var(n, d = 2)
-    a = rand(n)
-    z1 = (a .> 0.5)
+n1 = Normal(0, 1)
+g(x) = cdf(n1, x)
+# g(x) = sin(x)
+t1 = TDist(1)
+t3 = TDist(3)
+
+function epsilon(n, etype)
     
-    b = rand(n)
-    z2 = b .> 0.75
-    z2 += b .> 0.25
-    # z2 = z2 
-    z2 = [z1 z2]
+    if etype == 1
+            e = randn(n)/2
+        elseif etype == 2
+            e = rand(t3, n) * sqrt(3) / 10    
+        elseif etype == 3
+            e = rand(t1, n) / 10
+        elseif etype == 0
+            e = zeros(n)
+        else
+            e = randn(n)
+            e = (e.^4 .- 3) .* 0.3             
+    end
+    e
+end
 
-    c = rand(n)
-    z3 = c .> 0.9
-    z3 = [z2 z3]
+function zgen(n, d = 2)
     
     if d == 1
-        z = z1
+        
+        r = rand(n)
+        z = (r .> 0.5)
+        
     elseif d == 2
-        z = z2
+        
+        r1 = rand(n)
+        z1 = r1 .> 0.5
+        r2 = rand(n)
+        z2 = r2 .> 0.75
+        z2 += r2 .> 0.25
+        z = [z1 z2]
+        
     else
-        z = z3
+        
+        z = zeros(n, d)
+        len = 1 /(d + 1)
+        r = rand(n)
+        for k in 1:d
+            z[:, k] = (k - 1)*len .< r .< k*len
+        end
+        
     end
-    
-    # for k in 1:n
-    #     if sum(z[k, :]) > 1
-    #         z[k, :] = z[k, :]./norm(z[k, :])
-    #     end
-    # end
     z
 end
 
-f1(v) = v^2 
-df1(v) = 2v
 
-f2(v) = log( 1 + exp(v))
-df2(v) = exp(v) / ( 1 + exp(v))
-
-function dgp(nSample, γ, θ, α, β, fy = 1, d = 1, z = true, eps = 0.2)
-    if d == 0
-        ϵ = randn(nSample)
-    elseif d == 1
-        ϵt = readdlm("studentized.txt", ',', Float64)
-        ϵ = rand(ϵt, nSample)
+function ygen(X, α, θ, Z, β, γ, ϵ, tp)
+    if tp == 1
+        y = X*α  + Z*β + log.( 1 .+ exp.(X*θ + Z*γ .- 1)) + ϵ
+    elseif tp == 2        
+        y = X*α  + Z*β + g.(0.1((X*θ + Z*γ .- 1).^2)) + ϵ
     else
-        d2 = Cauchy(0,1)
-        ϵ = rand(d2, nSample)
+        y = X*α  + Z*β + tp.(X*θ + Z*γ .- 1) + ϵ
+        
     end
-    
-    d = length(α)
-    q = length(γ)
-    # X = (rand(nSample, d) .- 0.5) * 2
-    X = randn(nSample, d - 1)
-    minx = minimum(X, dims = 1)
-    maxx = maximum(X, dims = 1)
-    # X = X - repeat(minx, nSample, 1) 
-    # X = X ./ (maxx - minx) * 10 .- 5
-    if z
-        Z = discret_var(nSample, q) .* 0.5
-    else
-        Z = zeros(nSample, q)
-    end
-    
-    c0, c1 = α[1], θ[1]
-    eps = eps .* 1 # (log.(X*α[2:end] .+ 20 ))
-    y1 = X*θ[2:end] + Z*β + (X*α[2:end] + Z*γ .+ c0).^2 .+ c1 .+ eps.*ϵ
-    y2 = X*θ[2:end] + Z*β + log.(1 .+ exp.(X*α[2:end] + Z*γ .+ c0)) .+ c1 .+ eps.*ϵ
-    if fy == 1
-        y = y1
-    else 
-        y = y2
-    end
-    # y = y .- mean(y)
-    X, Z, y
+    y
 end
+
+function xgen(n, q, e)
+
+    ∑ = zeros(q,q)
+    
+    for i in 1:q
+        for j in i:q
+            ∑[i, j] = 0.5^(j - i)
+            ∑[j, i] = ∑[i, j]
+        end
+    end
+    
+    ∑ = sqrt.(∑)
+    U = randn(n, q)
+    X = U * ∑
+    X
+end
+
+function xyz(n, alpha, beta, theta, gamma, etp, ytp, escale = 0.2)
+    d = length(alpha)
+    U = randn(n, d)
+    X = U
+    q = length(beta)
+    Z = zgen(n, q)
+    e = escale * epsilon(n, etp)
+    y = ygen(X, alpha, theta, Z, beta, gamma, e, ytp)
+    X, y, Z
+    
+end
+
+

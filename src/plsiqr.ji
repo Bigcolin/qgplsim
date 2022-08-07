@@ -35,9 +35,9 @@ module plsiqr
     
     function print_model(m::plsiqr_model)
         println("alpha => ", round.(m.alpha, digits = 4))
+        println("beta => ", round.(m.beta, digits = 4))
         println("theta => ", round.(m.theta, digits = 4))
         println("gamma => ", round.(m.gamma, digits = 4))
-        println("beta => ", round.(m.beta, digits = 4))
     end
 
     function estimator(model::plsiqr_model, method = "optim_qr")
@@ -70,7 +70,7 @@ module plsiqr
             Xk = X[ind_zk, :]
 
             ht = var(Xk, dims = 1)
-			h = ones(p) .* nk^(-1 / (p + 6))
+			h = ones(p) .* nk^(-1 / (2p + 10))
 			for i in 1:p
 				h[i] = h[i] * ht[i] 
 			end
