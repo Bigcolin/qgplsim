@@ -123,20 +123,26 @@ function collection(c::Matrix)
     categ_c, dict_c # , categ_c[most_c]
 end
 
-function categ_binary(Z::T where T <:Array)
-    n,  = size(Z)
-    categ, index = collection(Z)
-    ncateg = length(categ)
-    res = Int.(zeros(n, ncateg))    
-    zmap = Dict()
-    for k in 1:ncateg
-        bin_z = Int.(zeros(ncateg))
-        zk = categ[k]
-        res[index[zk], k] .= 1
-        bin_z[k] = 1
-        zmap[zk] = bin_z
+function categ_binary(Za::T where T <:Array)
+    n, q = size(Za)
+    Z = zeros(n, 0)
+    zmap = []
+    for k in 1:q
+        zmapk = Dict()
+        categk, indexk = collection(Za[:, k])
+        nk = length(categk)
+        Zk = Int.(zeros(n, nk - 1))
+        for i in 1:nk - 1
+            bin_ki = Int.(zeros(nk - 1))
+            Zk[indexk[categk[i]], i] .= 1
+            bin_ki[i] = 1 
+            zmapk[categk[i]] = bin_ki
+        end
+        zmapk[categk[nk]] = Int.(zeros(nk - 1))
+        push!(zmap, zmapk)
+        Z = [Z Zk]
     end
-    res, zmap
+    Z, zmap
 end
 
 function get_train_index(Za, ntrain = 300)
@@ -148,18 +154,15 @@ function get_train_index(Za, ntrain = 300)
         ntrain = n - 100
     end   
     
-    ncateg = q     
-    prop = zeros(q)
-    prop[1:q] = sum(Z, dims = 1) ./ n
-#     prop[q + 1] = 1 - sum(prop)
-#     println(prop)
-    each_ntrain = Int.(round.(ntrain .* prop))
+    ncateg = length(categ)   
+    # println(prop)
     indr = [] # ind_train
     for k in 1:ncateg
         zk = categ[k]
         indzk = index[zk]
+        nk = Int.(round.(ntrain / n * length(indzk)))
         indk = shuffle(1:length(indzk))
-        indr = [indzk[indk[1:each_ntrain[k]]]; indr]
+        indr = [indzk[indk[1:nk]]; indr]
     end
     
     indn = Array(1:n)

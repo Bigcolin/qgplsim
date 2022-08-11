@@ -29,7 +29,7 @@ function boston(noz = "age") # names of x, y, and z
     X, Z, y
 end
 function califdata(stds = 3)
-    filename = "/Users/kyan/Projects/Datasets/housing.csv"
+    filename = "/home/kyan/Projects/Datasets/housing.csv"
     chdata = DataFrame(CSV.File(filename))
     df = copy(chdata)
     dropmissing!(df)
@@ -86,41 +86,14 @@ function get_cardata()
     Zcar = Array(cardata[noz])
     ycar = Array(cardata[noy])
     X = scaler(Xcar, 1)
+    n = length(ycar)
+    Zcar = reshape(Zcar, n, 1)
     Z, zmap = categ_binary(Zcar)
     y = copy(ycar)
     X, Z, y, zmap
 end
 
-function get_train_index(Za, ntrain = 300)
-    Z, zmap = categ_binary(Za)
-    categ, index = collection(Z) 
-    n, q = size(Z)
-    
-    if ntrain > n
-        ntrain = n - 100
-    end   
-    
-    ncateg = q     
-    prop = zeros(q)
-    prop[1:q] = sum(Z, dims = 1) ./ n
-#     prop[q + 1] = 1 - sum(prop)
-#     println(prop)
-    each_ntrain = Int.(round.(ntrain .* prop))
-    indr = [] # ind_train
-    for k in 1:ncateg
-        zk = categ[k]
-        indzk = index[zk]
-        indk = shuffle(1:length(indzk))
-        indr = [indzk[indk[1:each_ntrain[k]]]; indr]
-    end
-    
-    indn = Array(1:n)
-    indt = [x in indr for x in indn]
-    indt = Bool.(1 .- indt)
-    indt = indn[indt]
-    indr, indt
-    
-end
+
 
 function mc_simu(tau, width_exp, ntrain = 320, n_pt = 10) # n_pt = times of montecarlo on per. thread
     X, Z, y = get_cardata()

@@ -36,13 +36,19 @@ module semiMAVE
         end
     end
     
+    function print_model(m::model)
+
+        println("theta => ", round.(m.θ, digits = 4))
+        println("beta => ", round.(m.β, digits = 4))
+        
+    end
     function predictor(m::model, X::Matrix, Z::Matrix)
         theta = m.θ
         beta = m.β
         v_train = m.X * theta
         v_test = X * theta
         n, p = size(X)
-        h = var(v_test)*(n)^(-0.17)
+        h = var(v_test)*(n)^(-0.2)
         gv, dgv = zeros(n), zeros(n)
         for k in 1:n
             vij = - (v_train .- v_test[k])
@@ -58,16 +64,18 @@ module semiMAVE
 
     function estimator_(m::model, beta, theta)
         v = m.X*theta
-        h = var(v)*(m.n)^(-0.17)
+        h = var(v)*(m.n)^(-0.2)
 
         gv, dgv = zeros(m.n), zeros(m.n)
-
+        y = m.y - m.Z * beta
         for k in 1:m.n
-
-            vij = v .- sum(m.X[k, :] .* theta)
-            vk = hcat(ones(m.n), vij)
+            ind = Vector(1:m.n)
+            popat!(ind, k)
+            vij = v .- v[k]
+            vij = vij[ind]
+            vk = hcat(ones(m.n - 1), vij)
             wk = ker(vij, h)
-            b = pinv(transpose(vk .* wk) * vk)*transpose(vk .* wk) * (m.y - m.Z * beta)
+            b = pinv(transpose(vk .* wk) * vk)*transpose(vk .* wk) * y[ind]
 
             gv[k], dgv[k] = b[1], b[2]
         end
@@ -77,15 +85,18 @@ module semiMAVE
 
     function estimator__(m::model, gv, dgv)
 
-        h = ones(m.p) .* m.n^(-1 / (m.p + 4))
+        h = ones(m.p) .* m.n^(-1 / (2m.p + 10))
         A = zeros(m.p + m.q, m.p + m.q)
         b = zeros(m.p + m.q)
         for k in 1:m.n
 
+            ind = Vector(1:m.n)
+            popat!(ind, k)
             yj = m.y .- gv[k]
-            Xij = m.X - m.X[k, :]
+            Xij = (m.X - m.X[k, :]).*dgv
+            yj, Xij = yj[ind], Xij[ind, :]
             Wij = ker(Xij, h)
-            X = hcat(m.Z, Xij)  # n x (p + q)
+            X = hcat(m.Z[ind, :], Xij)  # n x (p + q)
             wx = transpose(Wij .* X) 
             A += wx * X
             b += wx * yj

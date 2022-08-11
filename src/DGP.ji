@@ -57,7 +57,7 @@ function ygen(X, α, θ, Z, β, γ, ϵ, tp)
     if tp == 1
         y = X*α  + Z*β + log.( 1 .+ exp.(X*θ + Z*γ .- 1)) + ϵ
     elseif tp == 2        
-        y = X*α  + Z*β + g.(0.1((X*θ + Z*γ .- 1).^2)) + ϵ
+        y = X*α  + Z*β + g.(0.5((X*θ + Z*γ .- 1).^2)) + ϵ
     else
         y = X*α  + Z*β + tp.(X*θ + Z*γ .- 1) + ϵ
         

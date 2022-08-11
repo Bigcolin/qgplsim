@@ -19,14 +19,14 @@ module qgplsim
 		gamma
 		theta # ::Vector{Float64}
 		beta # ::Vector{Float64}
-        init
+        dGz
 		function model(X, Z, y, τ = [0.5], widthExp = -0.17)
 			categ, index = collection(Z)
             n, p = size(X)
             n, q = size(Z)
             alpha, theta = zeros(p), zeros(p)
             beta, gamma = zeros(q), zeros(q)
-			new(X, Z, y, categ, index, τ, widthExp, alpha, gamma, theta, beta, false)
+			new(X, Z, y, categ, index, τ, widthExp, alpha, gamma, theta, beta)
 		end
     
     
@@ -53,20 +53,12 @@ module qgplsim
     end
 
 	function predict(m::model, x::Matrix, z::Vector, dv = 0) # d = 0 Gz, d = 1 dGz, d = 2  ada_Gz
-
-		v = x * m.theta + z * m.gamma 
+		v = x * m.theta + z .* m.gamma 
 		vm = m.X * m.theta + m.Z .* m.gamma
-		ym = m.y - m.X * m.alpha - m.Z * m.beta
+		ym = m.y - m.X * m.alpha - m.Z .* m.beta
 		n,p = size(x)
 		res = zeros(n)
-		
-		for k in 1:n
-			zk = z[k]
-			vz = vm[m.index[zk]]
-			yz = ym[m.index[zk]]
-			res[k] = Gz(v[k], vz, yz, dv, m.quantileNum, m.widthExp)[1]
-		end
-		res
+        res = vec_Gz(v, vm, ym, dv, m.quantileNum,  m.widthExp, method)
 		
 	end
 
@@ -78,38 +70,27 @@ module qgplsim
 		n,p = size(x)
 		res = zeros(n)
         res = vec_Gz(v, vm, ym, dv, m.quantileNum,  m.widthExp, method)
-		# categ, index = collection(z)
-# 		for k in 1:n
-# 			zk = z[k,:]
-# 			vz = vm[m.index[zk]]
-# 			yz = ym[m.index[zk]]
-#             if dv < 2
-#                 res[k] = Gz(v[k], vz, yz, dv, m.quantileNum, m.widthExp, method)[1]
-#             else
-#                 res[k] = adaptive_Gz(v[k], vz, yz, m.quantileNum, m.widthExp, method)[1]
 
-#             end
-# 		end
-		res
-		
 	end
 	function estimator(data::model, method = "qr")
-		x_estimator(data, method)
-
+		theta_init(data, method)
+        alpha_init(data)
+        # println("init estimation of theta, alpha: \n ")
+        # println("theta => ", data.theta)
+        # println("alpha => ", data.alpha, "\n")
+    
+        # gv, dgv = beta_estimator(data)
+        # theta_estimator(data, gv, dgv)
+        # alpha_estimator(data)
+    
         if data.widthExp == 0
             data.widthExp = bandwidth_selection(data)
         end
-		if sum(abs.(data.Z)) < 1e-4  # no Z 
-            n, q = size(data.Z)
-			data.gamma, data,beta = zeros(q), zeros(q)
-		else
-			z_estimator(data, method)
-		end
-        data.init = true
-        # print_model(data)
+		gamma_estimator(data, method)
+        beta_estimator(data)
 	end
 
-	function x_estimator(mode::model, method)
+	function theta_init(mode::model, method)
 
         X, y, tau = mode.X, mode.y, mode.quantileNum
         n, p = size(X)
@@ -148,6 +129,7 @@ module qgplsim
 				dGz[ind_zk[i],:] = wi[3:end]
 			end
         end
+            mode.dGz = dGz
 
             nij = Int(n * (n - 1) / 2)
             ∑ = zeros(nij, p)
@@ -164,17 +146,67 @@ module qgplsim
             ind_eigvec = argmax(eigval)
             theta = eigvecs(∑n)[:, ind_eigvec]
             theta = theta / norm(theta)
-            
-            dgz = dGz * theta
-            alpha = sum(dGz - kron(dgz, theta'), dims = 1)
-            alpha = alpha[1,:]/n
             sg = sign(theta[1])
-            mode.alpha, mode.theta = alpha, theta .* sg
+            mode.theta =  theta .* sg
+    end
+    
+    function alpha_init(m::model)
+            
+            n = length(m.y)
+            dgz = m.dGz * m.theta
+            alpha = sum(m.dGz - kron(dgz, m.theta'), dims = 1)
+            m.alpha = alpha[1,:]/n
+    
+    end
+
+
+    function theta_estimator(m::model, gv, dgv)
+        n, p = size(m.X)
+        h = ones(p) .* n^(-1 / 2(p + 5))
+        theta = zeros(p)
+        y = m.y - m.Z*m.beta - m.X * m.alpha
+        # b = zeros(n + 1)
+        for k in 1:n
+            ind = Vector(1:n)
+            popat!(ind, k)
+            yj = y .- gv[k]
+            Xij = (m.X - m.X[k, :]).*dgv
+            yj, Xij = yj[ind], Xij[ind, :]
+            Wij = ker(Xij, h)
+            # Xij = hcat(ones(n - 1, 1), Xij) 
+            res = localLinear_quantReg.solver(yj, Xij, Wij, m.quantileNum) 
+            thetak = res[2:end]
+            # b[k] = res[2]
+            theta = theta + thetak
+        end
+        m.theta = theta / norm(theta)
+
+    end
+
+    function alpha_estimator(m::model)
+        n, p = size(m.X)
+        alpha, b = zeros(p), zeros(n)
+        v = m.X*m.theta
+        h = var(v)*(n)^(m.widthExp)
+        y = m.y - m.Z*m.beta
+        for k in 1:n
+            ind = Vector(1:n)
+            popat!(ind, k)
+            vij = v .- v[k]
+            vij = vij[ind] 
+            vk = hcat(ones(n - 1),  vij)
+            wk = ker(vij, h)
+            res = localLinear_quantReg.solver(y[ind], vk, wk, m.quantileNum)
+            b[k] = res[2]
+        end
+        alpha = pinv(m.X'*m.X)*m.X'*b
+
     end
 
 
 
-	function z_estimator(data::model, method)
+	function gamma_estimator(data::model, method)
+    
         if typeof(data.Z) <: Vector
             n = length(data.Z)
             q = 1
@@ -183,7 +215,7 @@ module qgplsim
         end
 
         dz = 1
-		gamma, beta = zeros(q), []
+		gamma = zeros(q)
 		X = data.X
 		v = X * data.theta
 		y = data.y  - data.X * data.alpha  # - data.Z * data.beta # c1 = 0
@@ -276,48 +308,108 @@ module qgplsim
 				ΔdJ[k] = ΔdJ[k] ./ (C1i[k] - C0i[k])
             
 			end
-			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ #./(c1 - c0)
-            # println(i, ": ", gammai)
+			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ 
       		gamma = gamma + gammai 
             
 			# estimation for β    
-			d1 =  sum(z1 .* gammai)
-            p1 = Vector(LinRange(v0, v1, 10))
-			yp1 = vec_Gz(p1, vz, yz, 0, τ, hp)
-			ΔJ = zeros(ncateg - 1)
+# 			d1 =  sum(z1 .* gammai)
+#             p1 = Vector(LinRange(v0, v1, 11))
+# 			yp1 = vec_Gz(p1, vz, yz, 0, τ, hp)
+# 			ΔJ = zeros(ncateg - 1)
         
-            for k in 1:ncateg - 1
-				zk = categ[k][1]
-				vk = v[categ[k + 1][2]]
-				yk = y[categ[k + 1][2]]
-                dk =  sum(zk .* gammai)
-                pk = Vector(LinRange(v0 + d1 - dk, v1 + d1 - dk, 10))
-                ypk = vec_Gz(pk, vk, yk, 0, τ, hp)
-                ΔJ[k] = mean(yp1 - ypk)               
-           
-            end
-			
-# 			g1(u) = Gz(u, vz, yz, 0, τ, hp)
-
-# 			for k in 1:ncateg - 1
+#             for k in 1:ncateg - 1
 # 				zk = categ[k][1]
 # 				vk = v[categ[k + 1][2]]
 # 				yk = y[categ[k + 1][2]]
-# 				gk(u) = Gz(u, vk, yk, 0, τ, hp)
-# 				dk = sum(zk .* gammai)
-# 				ΔJ[k] = glquad(g1, v0 - d1, v1 - d1, -1e5, 1e5) - 
-#                         glquad(gk, v0 - dk, v1 - dk, -1e5, 1e5)
+#                 dk =  sum(zk .* gammai)
+#                 pk = Vector(LinRange(v0 + d1 - dk, v1 + d1 - dk, 11))
+#                 ypk = vec_Gz(pk, vk, yk, 0, τ, hp)
+#                 ΔJ[k] = mean(yp1 - ypk)               
+           
+#             end
 
-# 			end
-
-			ΔZ = - ΔZ
-			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ # /abs(v1 - v0)
-            # println(betai)
-			push!(beta, betai)
+# 			ΔZ = - ΔZ
+# 			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ # /abs(v1 - v0)
+#             # println(betai)
+# 			push!(beta, betai)
 		end
     
-		data.gamma, data.beta = gamma/ncateg, mean(beta) # .- 0.5
+		data.gamma = gamma/ncateg # .- 0.5
 	end
+    function beta_estimator(m::model)
+        v = m.X*m.theta  + m.Z*m.gamma
+        n, q = size(m.Z)
+        h = var(v)*(n)^(m.widthExp)
+        y = m.y - m.X*m.alpha
+        gv, dgv = zeros(n), zeros(n)
+        categ = collect(m.index)
+        ncateg = length(categ)
+        nzz = Int((ncateg - 1) * (ncateg) / 2)
+        A, b = zeros(nzz + 1, q), zeros(nzz + 1)
+        A[1, :] = m.gamma
+        t = 2
+        for i in 1:(ncateg - 1)
+    
+            zi, indi = categ[i][1], categ[i][2]
+            ni = length(indi)
+            yi = y[indi]
+            vi = v[indi]
+            for j in (i + 1):ncateg
+                # if j != i
+                    zj, indj = categ[j][1], categ[j][2]
+                    nj = length(indj)
+                    vj = v[indj]
+                    yj = y[indj]
+                    bij = 0
+                    for k in 1:nj
+                        yik = yi .- yj[k]
+                        vik = vi .- vj[k]
+                        wk = ker(vik, h)
+                        vik = hcat(ones(ni, 1), vik)
+                        res = localLinear_quantReg.solver(yik, vik, wk, m.quantileNum)
+                        bij = bij + res[2]
+                    end
+                    bij = bij / nj
+                    A[t, :] = zi - zj
+                    b[t] = bij
+                    # println(A)
+                    # println(b)                    
+                    t = t + 1
+                # end
+            end
+        end
+
+            m.beta = pinv(A'*A)*A'*b    
+    end
+
+    # function beta_estimator(m::model)
+    #     v = m.X*m.theta  + m.Z*m.gamma
+    #     n, q = size(m.Z)
+    #     h = var(v)*(n)^(m.widthExp)
+    #     y = m.y - m.X*m.alpha
+    #     gv, dgv, beta = zeros(n), zeros(n), zeros(q)
+    #     # nb = 0
+    #     for k in 1:n
+    #         ind = Vector(1:n)
+    #         popat!(ind, k)
+    #         vij = v .- v[k]
+    #         vij = vij[ind] 
+    #         wk = ker(vij, h)        
+    #         vk = hcat(ones(n - 1),  vij, m.Z[ind, :] - m.Z[k, :])  # 
+    #         b = localLinear_quantReg.solver(y[ind] .- y[k], vk, wk, m.quantileNum)
+    #         # println(b)
+    #         gv[k], dgv[k] = b[2], b[3]
+    #         betak = b[4:end]
+    #         # if norm(betak) > 1e-6
+    #             beta = beta + betak
+    #             # nb = nb + 1
+    #         # end
+    #         # beta = beta + b[3:end]        
+    #     end
+    #     m.beta = beta/n
+    #     # gv, dgv
+    # end
+
 
 
 	function Gz(v, vz, yz, d = 1, tau = 0.5, hp = -0.17, method = "gurobi")
