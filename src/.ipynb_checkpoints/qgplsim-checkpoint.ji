@@ -4,8 +4,7 @@ module qgplsim
 	include("supportFunctions.ji")
 	include("localLinear_quantReg.ji")
 	using LinearAlgebra, Distributions, Random, Statistics
-    using GLM, DataFrames, CSV, CategoricalArrays
-	using Clustering
+    using DataFrames, CSV, CategoricalArrays
 
 	mutable struct model
 		X::Matrix{Float64}
@@ -83,9 +82,6 @@ module qgplsim
         # theta_estimator(data, gv, dgv)
         # alpha_estimator(data)
     
-        if data.widthExp == 0
-            data.widthExp = bandwidth_selection(data)
-        end
 		gamma_estimator(data, method)
         beta_estimator(data)
 	end
@@ -297,7 +293,6 @@ module qgplsim
             for k in 1:ncateg - 1
                 ΔdJ[k] = ΔdJ[k] .- glquad(dg1, v0, v1, C0i[k], C1i[k])
             end
-            # println(ΔdJ)
             
 			for k in 1:ncateg - 1
 				
@@ -311,30 +306,9 @@ module qgplsim
 			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ 
       		gamma = gamma + gammai 
             
-			# estimation for β    
-# 			d1 =  sum(z1 .* gammai)
-#             p1 = Vector(LinRange(v0, v1, 11))
-# 			yp1 = vec_Gz(p1, vz, yz, 0, τ, hp)
-# 			ΔJ = zeros(ncateg - 1)
-        
-#             for k in 1:ncateg - 1
-# 				zk = categ[k][1]
-# 				vk = v[categ[k + 1][2]]
-# 				yk = y[categ[k + 1][2]]
-#                 dk =  sum(zk .* gammai)
-#                 pk = Vector(LinRange(v0 + d1 - dk, v1 + d1 - dk, 11))
-#                 ypk = vec_Gz(pk, vk, yk, 0, τ, hp)
-#                 ΔJ[k] = mean(yp1 - ypk)               
-           
-#             end
-
-# 			ΔZ = - ΔZ
-# 			betai = inv(transpose(ΔZ)*ΔZ + 0.000001 * I(q)) * transpose(ΔZ) * ΔJ # /abs(v1 - v0)
-#             # println(betai)
-# 			push!(beta, betai)
 		end
     
-		data.gamma = gamma/ncateg # .- 0.5
+		data.gamma = gamma/ncateg 
 	end
     function beta_estimator(m::model)
         v = m.X*m.theta  + m.Z*m.gamma
@@ -384,34 +358,6 @@ module qgplsim
 
             m.beta = beta / t * (q - 1)
     end
-
-    # function beta_estimator(m::model)
-    #     v = m.X*m.theta  + m.Z*m.gamma
-    #     n, q = size(m.Z)
-    #     h = var(v)*(n)^(m.widthExp)
-    #     y = m.y - m.X*m.alpha
-    #     gv, dgv, beta = zeros(n), zeros(n), zeros(q)
-    #     # nb = 0
-    #     for k in 1:n
-    #         ind = Vector(1:n)
-    #         popat!(ind, k)
-    #         vij = v .- v[k]
-    #         vij = vij[ind] 
-    #         wk = ker(vij, h)        
-    #         vk = hcat(ones(n - 1),  vij, m.Z[ind, :] - m.Z[k, :])  # 
-    #         b = localLinear_quantReg.solver(y[ind] .- y[k], vk, wk, m.quantileNum)
-    #         # println(b)
-    #         gv[k], dgv[k] = b[2], b[3]
-    #         betak = b[4:end]
-    #         # if norm(betak) > 1e-6
-    #             beta = beta + betak
-    #             # nb = nb + 1
-    #         # end
-    #         # beta = beta + b[3:end]        
-    #     end
-    #     m.beta = beta/n
-    #     # gv, dgv
-    # end
 
 
 
@@ -472,112 +418,4 @@ module qgplsim
 		Gz
 	end
 
-    function bandwidth_cv1(m::model, widthExp::Float64) # CV(1) estimationg for bandwidth
-        v = m.X * m.theta
-		y = m.y - m.X * m.alpha
-        ncateg = m.index.count
-		n,p = size(m.X)
-		res = zeros(n)
-		# categ, index = collection(z)
-		for k in 1:ncateg
-            indk = m.index[m.categ[k]] 
-            vz = v[indk]
-            yz = y[indk]
-            nz = length(vz)
-            for j in 1:nz
-                indz = Vector(1:nz)
-                popat!(indz, j)
-                indj = indk[j]
-            
-                vz_j = vz[indz]
-                yz_j = yz[indz]
-                res[indj] = Gz(vz[j], vz_j, yz_j, 1, m.quantileNum, widthExp)[1]
-            end
-        end
-        bias = rho.(y .- res, m.quantileNum) |> sum 
-        bias = bias / (2n)
-    end
-
-
-    function bandwidth_selection(m::model)
-        bw = -0.30:0.015:0.10
-        nbw = length(bw)
-        bw_path = zeros(nbw)
-        for j in 1:nbw
-            bw_path[j] = qgplsim.bandwidth_cv1(m, bw[j])
-        end
-        ind = argmin(bw_path)
-        bandwidth_exp = bw[ind]
-    end
-
-	function x_estimator_bak(data::model, method)
-		X, y, tau = data.X, data.y, data.quantileNum
-		
-		n, p = size(X)
-		categ, index = data.categ, data.index
-		ncateg = index.count
-
-		Bz = zeros(n, p)
-		for k in 1:ncateg
-			z = categ[k]
-			indz = index[z]
-			nz = length(indz)
-			az = zeros(nz)
-			yz = y[indz]
-			Xz = X[indz, :]
-			mean_xz = mean(Xz, dims=1)
-			ht = var(Xz, dims = 1)
-			h = ones(p) .* nz^(-0.1)
-			for i in 1:p
-				h[i] = h[i] * ht[i] 
-
-			end
-
-			for i in 1:nz 
-				Xzi = Xz[i, :]
-				Xi = Xz - (Xzi)
-				ind = Vector(1:nz)
-				popat!(ind, i)
-				Xi = Xi[ind, :]
-				yzi = yz[ind]
-				KerVal = ker(Xi, h)
-                wi = localLinear_quantReg.solver(yzi, Xi, KerVal, tau, 1, method)
-
-				az[i] = wi[1]
-				Bz[indz[i],:] = wi[2:end]
-			end
-		end
-
-		nij = Int(n * (n - 1) / 2)
-		bz = zeros(nij, p)
-		ij = 1
-		for i in 1:n - 1 # Int(n/2)
-			for j in (i + 1) : n # (Int(n/2) + 1):n
-				bz[ij, :] = Bz[i, :] - Bz[j, :]
-				ij = ij + 1
-
-			end
-		end
-		Rbz = kmeans(bz |> transpose, 2)
-       	bz1 = Rbz.centers[:, 1]
-        bz2 = Rbz.centers[:, 2]
-            
-		if bz1[1] > 0
-			bz2 = -bz2
-		else
-			bz1 = -bz1
-		end
-		sum_Bz = bz1 + bz2
-		alpha = sum_Bz / norm(sum_Bz) 
-
-		alpha_t = alpha
-		Bz_t = Bz
-
-		C = Bz_t * alpha_t ./ norm(alpha_t)^2
-		theta = sum(Bz_t - kron(C , transpose(alpha_t)) , dims = 1)
-		theta = theta[1,:] / n
-        sg = sign(alpha[1])
-		theta .* sg, alpha .* sg, bz1, bz2 # Cz
-
-	end
 end # module
