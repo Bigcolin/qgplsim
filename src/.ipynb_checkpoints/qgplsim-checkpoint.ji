@@ -339,21 +339,21 @@ module qgplsim
     function beta_estimator(m::model)
         v = m.X*m.theta  + m.Z*m.gamma
         n, q = size(m.Z)
-        h = var(v)*(n)^(m.widthExp)
         y = m.y - m.X*m.alpha
         gv, dgv = zeros(n), zeros(n)
         categ = collect(m.index)
         ncateg = length(categ)
-        nzz = Int((ncateg - 1) * (ncateg) / 2)
-        A, b = zeros(nzz + 1, q), zeros(nzz + 1)
+        A, b = zeros(2, q), zeros(2)
         A[1, :] = m.gamma
-        t = 2
+        t = 0
+        beta = zeros(q)
         for i in 1:(ncateg - 1)
     
             zi, indi = categ[i][1], categ[i][2]
             ni = length(indi)
             yi = y[indi]
             vi = v[indi]
+            h = var(vi)*(ni)^(m.widthExp)
             for j in (i + 1):ncateg
                 # if j != i
                     zj, indj = categ[j][1], categ[j][2]
@@ -367,19 +367,22 @@ module qgplsim
                         wk = ker(vik, h)
                         vik = hcat(ones(ni, 1), vik)
                         res = localLinear_quantReg.solver(yik, vik, wk, m.quantileNum)
+                        # println("bij$k:", res[2])
                         bij = bij + res[2]
                     end
                     bij = bij / nj
-                    A[t, :] = zi - zj
-                    b[t] = bij
-                    # println(A)
-                    # println(b)                    
+                    # println("bij: ", bij, "\n")
+                    A[2, :] = zi - zj
+                    b[2] = bij
+                    beta_ij = pinv(A'*A)*A'*b 
+                    # println(beta_ij)
+                    beta = beta + beta_ij                  
                     t = t + 1
                 # end
             end
         end
 
-            m.beta = pinv(A'*A)*A'*b    
+            m.beta = beta / t * (q - 1)
     end
 
     # function beta_estimator(m::model)
