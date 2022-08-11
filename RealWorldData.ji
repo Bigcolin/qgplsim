@@ -3,7 +3,7 @@ include("./src/supportFunctions.ji")
 using Base.Threads
 
 function boston(noz = "age") # names of x, y, and z
-    filename = "/Users/kyan/Projects/Datasets/Boston.csv"
+    filename = "/home/kyan/Projects/Datasets/Boston.csv"
     data = DataFrame(CSV.File(filename))
     df = copy(data)
     dropmissing!(df)
