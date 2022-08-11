@@ -42,14 +42,16 @@ function zgen(n, d = 2)
     else
         
         z = zeros(n, d)
-        len = 1 /(d + 1)
+        len = 1 / d
         r = rand(n)
-        for k in 1:d
+        for k in 1:d - 1
             z[:, k] = (k - 1)*len .< r .< k*len
         end
-        
+        z[:, d] = rand(n) .> 0.5
     end
-    z
+    
+   z
+   
 end
 
 
