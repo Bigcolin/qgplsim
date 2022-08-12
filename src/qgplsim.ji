@@ -211,7 +211,7 @@ module qgplsim
         end
 
         dz = 1
-		gamma = zeros(q)
+		gamma = []
 		X = data.X
 		v = X * data.theta
 		y = data.y  - data.X * data.alpha  # - data.Z * data.beta # c1 = 0
@@ -270,7 +270,7 @@ module qgplsim
 				c1 = minimum(C1)
 
 
-
+        
 		for i in 1:ncateg
 			ΔdJ = zeros(ncateg - 1)
             C0i, C1i = max.(C0, C0[i]), min.(C1, C1[i])
@@ -304,11 +304,14 @@ module qgplsim
             
 			end
 			gammai = inv(transpose(ΔZ)*ΔZ + 0.000001 .* I(q)) * transpose(ΔZ) * ΔdJ 
-      		gamma = gamma + gammai 
-            
+            # println(gammai)
+            if sum(gammai) < 1e6
+                push!(gamma, gammai) 
+            end
 		end
     
-		data.gamma = gamma/ncateg 
+		data.gamma = mean(gamma)
+    
 	end
     function beta_estimator(m::model)
         v = m.X*m.theta  + m.Z*m.gamma
@@ -317,19 +320,19 @@ module qgplsim
         gv, dgv = zeros(n), zeros(n)
         categ = collect(m.index)
         ncateg = length(categ)
-        A, b = zeros(2, q), zeros(2)
-        A[1, :] = m.gamma
-        t = 0
+        A, b = zeros(ncateg, q), zeros(ncateg)
+        A[ncateg, :] = m.gamma
         beta = zeros(q)
-        for i in 1:(ncateg - 1)
+        for i in 1:ncateg
     
             zi, indi = categ[i][1], categ[i][2]
             ni = length(indi)
             yi = y[indi]
             vi = v[indi]
             h = var(vi)*(ni)^(m.widthExp)
-            for j in (i + 1):ncateg
-                # if j != i
+            for j in 1:ncateg
+                if j != i
+                    indij = j - i + (j < i) * ncateg
                     zj, indj = categ[j][1], categ[j][2]
                     nj = length(indj)
                     vj = v[indj]
@@ -346,17 +349,25 @@ module qgplsim
                     end
                     bij = bij / nj
                     # println("bij: ", bij, "\n")
-                    A[2, :] = zi - zj
-                    b[2] = bij
-                    beta_ij = pinv(A'*A)*A'*b 
+                    A[indij , :] = zi - zj
+                    b[indij] = bij
+
                     # println(beta_ij)
-                    beta = beta + beta_ij                  
-                    t = t + 1
-                # end
+               
+                end
+           
+            end
+            try
+                beta_i = pinv(A'*A)*A'*b             
+                beta = beta + beta_i
+            catch e
+                println("lapack error, ","zi = ", zi)
+                println("[A b] = ", [A b])
+                nateg = ncateg - 1
             end
         end
 
-            m.beta = beta / t * (q - 1)
+            m.beta = beta / ncateg # beta / t * (q - 1)
     end
 
 
