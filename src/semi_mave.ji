@@ -64,7 +64,7 @@ module semiMAVE
 
     function estimator_(m::model, beta, theta)
         v = m.X*theta
-        h = var(v)*(m.n)^(-0.2)
+        h = var(v)*(m.n)^(-0.12)
 
         gv, dgv = zeros(m.n), zeros(m.n)
         y = m.y - m.Z * beta
