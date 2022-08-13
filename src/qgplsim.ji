@@ -158,7 +158,7 @@ module qgplsim
 
     function theta_estimator(m::model, gv, dgv)
         n, p = size(m.X)
-        h = ones(p) .* n^(-1 / 2(p + 5))
+        h = ones(p) .* n^(-1 / 2(p + 6))
         theta = zeros(p)
         y = m.y - m.Z*m.beta - m.X * m.alpha
         # b = zeros(n + 1)

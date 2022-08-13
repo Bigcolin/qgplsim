@@ -145,6 +145,44 @@ function categ_binary(Za::T where T <:Array)
     Z, zmap
 end
 
+function nsplit_z(Za, nfold)
+    Z, zmap = categ_binary(Za)
+    categ, index = collection(Z) 
+    ncateg = length(categ)       
+    n, q = size(Z)
+    
+    
+    index_train, index_test = [], [] 
+    for k in 1:nfold
+        push!(index_train, [])
+        push!(index_test, [])
+        
+    end
+    prop = Vector(1:nfold) ./ nfold
+    indn = Vector(1:n)
+    for k in 1:ncateg
+        zk = categ[k]
+        indzk = index[zk]
+        nk = Int.(round.(length(indzk) .* prop))
+        indk = shuffle(1:length(indzk))
+        for f in 1:nfold - 1
+            index_test[f] = [indzk[indk[(nk[f] + 1):nk[f + 1]]]; index_test[f]]
+        end
+        index_test[nfold] = [indzk[indk[1:nk[1]]]; index_test[nfold]]
+        # println(index_test[1], "\n")
+    end
+
+    for k in 1:nfold
+        indt = index_test[k]
+        indr = [x in indt for x in indn]
+        indr = Bool.(1 .- indr)
+        indr = indn[indr]
+        index_train[k] = [index_train[k]; indr]
+    end
+
+    index_test, index_train
+end
+
 function get_train_index(Za, ntrain = 300)
     Z, zmap = categ_binary(Za)
     categ, index = collection(Z) 

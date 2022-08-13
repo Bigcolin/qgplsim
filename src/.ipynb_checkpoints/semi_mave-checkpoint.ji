@@ -64,7 +64,7 @@ module semiMAVE
 
     function estimator_(m::model, beta, theta)
         v = m.X*theta
-        h = var(v)*(m.n)^(-0.12)
+        h = var(v)*(m.n)^(-0.2)
 
         gv, dgv = zeros(m.n), zeros(m.n)
         y = m.y - m.Z * beta
@@ -85,7 +85,7 @@ module semiMAVE
 
     function estimator__(m::model, gv, dgv)
 
-        h = ones(m.p) .* m.n^(-1 / (2m.p + 10))
+        h = ones(m.p) .* m.n^(-1 / (m.p + 5))
         A = zeros(m.p + m.q, m.p + m.q)
         b = zeros(m.p + m.q)
         for k in 1:m.n
